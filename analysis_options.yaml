@@ -10,6 +10,5 @@ analyzer:
     strict-casts: true
     strict-inference: true
     strict-raw-types: true
-
-experiments:
-  - null-aware-elements
+  experiments:
+    - null-aware-elements
