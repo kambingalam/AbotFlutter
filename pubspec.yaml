@@ -64,3 +64,5 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  experiments:
+    - null-aware-elements
