@@ -34,7 +34,7 @@ class _SearchSkeletonState extends State<SearchSkeleton>
 
     return AnimatedBuilder(
       animation: _controller,
-      builder: (_, _) {
+      builder: (_, __) {
         return ListView.builder(
           physics: const NeverScrollableScrollPhysics(),
           itemCount: widget.itemCount,

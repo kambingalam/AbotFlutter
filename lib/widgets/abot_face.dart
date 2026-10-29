@@ -74,7 +74,7 @@ class _AbotFaceState extends State<AbotFace>
       height: widget.size,
       child: AnimatedBuilder(
         animation: _blinkController,
-        builder: (_, _) {
+        builder: (_, __) {
           return CustomPaint(
             painter: _AbotFacePainter(
               color: widget.color,

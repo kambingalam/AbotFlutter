@@ -416,7 +416,7 @@ class _RouteCardSkeletonState extends State<_RouteCardSkeleton>
 
     return AnimatedBuilder(
       animation: _controller,
-      builder: (_, _) {
+      builder: (_, __) {
         return Container(
           margin: const EdgeInsets.only(bottom: 8),
           padding: const EdgeInsets.all(12),

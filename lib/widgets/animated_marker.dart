@@ -165,7 +165,7 @@ class _AnimatedDriverMarkerState extends State<AnimatedDriverMarker>
         children: [
           AnimatedBuilder(
             animation: _pulseController,
-            builder: (_, _) {
+            builder: (_, __) {
               final scale = 0.6 + _pulseController.value * 0.6;
               final opacity = (1 - _pulseController.value) * 0.4;
 

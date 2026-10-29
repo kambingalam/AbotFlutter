@@ -12,8 +12,8 @@ class FadeScalePageRoute<T> extends PageRouteBuilder<T> {
   }) : super(
           transitionDuration: duration,
           reverseTransitionDuration: duration,
-          pageBuilder: (_, _, _) => page,
-          transitionsBuilder: (_, animation, _, child) {
+          pageBuilder: (_, __, ___) => page,
+          transitionsBuilder: (_, animation, __, child) {
             final fade = CurvedAnimation(
               parent: animation,
               curve: Curves.easeOut,
