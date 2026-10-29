@@ -48,11 +48,11 @@ class _TripRouteCardState extends State<TripRouteCard>
     super.dispose();
   }
 
-  Future<void> _handleTapDown(_) async {
+  Future<void> _handleTapDown(TapDownDetails _) async {
     await _scaleController.forward();
   }
 
-  Future<void> _handleTapUp(_) async {
+  Future<void> _handleTapUp(TapUpDetails _) async {
     await _scaleController.reverse();
     await HapticService.select();
     widget.onTap();
