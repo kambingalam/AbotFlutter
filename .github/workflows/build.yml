@@ -13,7 +13,7 @@ jobs:
           flutter-version: '3.32'
       - run: flutter config --no-analytics
       - run: flutter pub get
-      - run: sed -i 's/\.fileMode/.isFile()/g' "$FLUTTER_ROOT/packages/flutter_tools/gradle/src/main/kotlin/FlutterPlugin.kt"
+      - run: sed -i 's/fileMode/isFile()/g' "$FLUTTER_ROOT/packages/flutter_tools/gradle/src/main/kotlin/FlutterPlugin.kt"
       - run: flutter analyze || true
       - run: |
           if [ -d test ]; then flutter test; else echo "No test directory, skipping"; fi
