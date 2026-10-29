@@ -10,7 +10,8 @@ analyzer:
     strict-casts: true
     strict-inference: true
     strict-raw-types: true
-  experiments:
-    - null-aware-elements
   fatal-infos: false
   fatal-warnings: false
+
+experiments:
+  - null-aware-elements
