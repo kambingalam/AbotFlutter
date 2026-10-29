@@ -52,7 +52,7 @@ dependencies:
   # Peta offline berbasis MBTiles
   flutter_map_mbtiles: ^1.0.4
   file_picker: ^10.3.10
-  path_provider: ^2.1.6
+  path_provider: ^2.1.5
   audio_session: ^0.1.21
   mqtt_client: ^10.13.0
 
