@@ -1,3 +1,12 @@
+buildscript {
+    repositories {
+        mavenCentral()
+    }
+    dependencies {
+        classpath("org.codehaus.groovy:groovy-xml:4.0.21")
+    }
+}
+
 allprojects {
     repositories {
         google()
