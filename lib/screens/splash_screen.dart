@@ -256,15 +256,11 @@ class _SplashScreenState extends State<SplashScreen>
                               shape: BoxShape.circle,
                               color: _surface,
                               border: Border.all(
-                                color: _accent.withValues(
-                                  alpha: 0.12 + pulse * 0.12,
-                                ),
+                                color: _accent.withOpacity(0.12 + pulse * 0.12),
                               ),
                               boxShadow: [
                                 BoxShadow(
-                                  color: _accent.withValues(
-                                    alpha: 0.035 + pulse * 0.035,
-                                  ),
+                                  color: _accent.withOpacity(0.035 + pulse * 0.035),
                                   blurRadius: 30 + pulse * 10,
                                   spreadRadius: 1,
                                 ),
