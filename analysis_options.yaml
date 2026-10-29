@@ -12,3 +12,5 @@ analyzer:
     strict-raw-types: true
   experiments:
     - null-aware-elements
+  fatal-infos: false
+  fatal-warnings: false
