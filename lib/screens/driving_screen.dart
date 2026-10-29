@@ -1203,7 +1203,7 @@ class _DrivingScreenState extends State<DrivingScreen>
                   crossAxisAlignment: CrossAxisAlignment.stretch,
 
                   children: [
-                    ?topCard,
+                    if (topCard != null) topCard,
 
                     if (offRoute || manager.isRerouting) ...[
                       if (topCard != null) const SizedBox(height: 8),
