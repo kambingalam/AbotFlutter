@@ -32,7 +32,7 @@ class DebugOverlay extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.85),
+        color: Colors.black.withOpacity( 0.85),
         borderRadius: BorderRadius.circular(AppRadius.md),
       ),
       child: DefaultTextStyle(

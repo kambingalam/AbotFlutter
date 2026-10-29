@@ -40,7 +40,7 @@ class VoiceSearchButton extends StatelessWidget {
             height: _size,
             decoration: BoxDecoration(
               color: listening
-                  ? primary.withValues(alpha: 0.15)
+                  ? primary.withOpacity( 0.15)
                   : Colors.transparent,
               shape: BoxShape.circle,
             ),
@@ -55,7 +55,7 @@ class VoiceSearchButton extends StatelessWidget {
                   ),
                 Icon(
                   listening ? Icons.mic : Icons.mic_none,
-                  color: listening ? primary : onSurface.withValues(alpha: 0.6),
+                  color: listening ? primary : onSurface.withOpacity( 0.6),
                   size: 22,
                 ),
               ],
@@ -112,7 +112,7 @@ class _PulsingRingState extends State<_PulsingRing>
               height: widget.size,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: widget.color.withValues(alpha: opacity),
+                color: widget.color.withOpacity( opacity),
               ),
             ),
           );

@@ -323,7 +323,7 @@ class _SearchScreenState extends State<SearchScreen> {
                             : 'Telusuri di sini',
                         prefixIcon: Icon(
                           Icons.search,
-                          color: onSurface.withValues(alpha: 0.6),
+                          color: onSurface.withOpacity( 0.6),
                         ),
                         suffixIcon: _controller.text.isNotEmpty
                             ? IconButton(
@@ -380,7 +380,7 @@ class _SearchScreenState extends State<SearchScreen> {
           index: index,
           child: ListTile(
             leading: CircleAvatar(
-              backgroundColor: onSurface.withValues(alpha: 0.1),
+              backgroundColor: onSurface.withOpacity( 0.1),
               child: Icon(_iconFor(place), color: AppColors.primary),
             ),
             title: Text(
@@ -395,7 +395,7 @@ class _SearchScreenState extends State<SearchScreen> {
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontSize: 12,
-                color: onSurface.withValues(alpha: 0.7),
+                color: onSurface.withOpacity( 0.7),
               ),
             ),
             onTap: () => _selectPlace(place),
@@ -418,12 +418,12 @@ class _SearchScreenState extends State<SearchScreen> {
             Icon(
               Icons.history,
               size: 64,
-              color: onSurface.withValues(alpha: 0.4),
+              color: onSurface.withOpacity( 0.4),
             ),
             const SizedBox(height: 12),
             Text(
               'Belum ada riwayat',
-              style: TextStyle(color: onSurface.withValues(alpha: 0.6)),
+              style: TextStyle(color: onSurface.withOpacity( 0.6)),
             ),
           ],
         ),
@@ -463,7 +463,7 @@ class _SearchScreenState extends State<SearchScreen> {
 
               return ListTile(
                 leading: CircleAvatar(
-                  backgroundColor: onSurface.withValues(alpha: 0.1),
+                  backgroundColor: onSurface.withOpacity( 0.1),
                   child: const Icon(Icons.history, color: AppColors.primary),
                 ),
                 title: Text(
@@ -481,7 +481,7 @@ class _SearchScreenState extends State<SearchScreen> {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 12,
-                    color: onSurface.withValues(alpha: 0.7),
+                    color: onSurface.withOpacity( 0.7),
                   ),
                 ),
                 onTap: () => _selectPlace(place),

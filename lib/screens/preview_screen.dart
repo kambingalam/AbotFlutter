@@ -211,7 +211,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
                               .map((c) => LatLng(c[1], c[0]))
                               .toList(),
                           strokeWidth: 4,
-                          color: onSurface.withValues(alpha: 0.3),
+                          color: onSurface.withOpacity( 0.3),
                         ),
                   ],
                 ),
@@ -422,7 +422,7 @@ class _RouteCardSkeletonState extends State<_RouteCardSkeleton>
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(AppRadius.md),
-            border: Border.all(color: onSurface.withValues(alpha: 0.1)),
+            border: Border.all(color: onSurface.withOpacity( 0.1)),
           ),
           child: Row(
             children: [
@@ -469,9 +469,9 @@ class _RouteCardSkeletonState extends State<_RouteCardSkeleton>
   LinearGradient _shimmerGradient(Color onSurface) {
     return LinearGradient(
       colors: [
-        onSurface.withValues(alpha: 0.06),
-        onSurface.withValues(alpha: 0.14),
-        onSurface.withValues(alpha: 0.06),
+        onSurface.withOpacity( 0.06),
+        onSurface.withOpacity( 0.14),
+        onSurface.withOpacity( 0.06),
       ],
       stops: [
         (_controller.value - 0.3).clamp(0.0, 1.0),

@@ -1393,7 +1393,7 @@ class _DrivingScreenState extends State<DrivingScreen>
 
         boxShadow: [
           BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.4),
+            color: AppColors.primary.withOpacity( 0.4),
 
             blurRadius: 20,
 
@@ -1445,7 +1445,7 @@ class _DrivingScreenState extends State<DrivingScreen>
                   'Menuju tujuan',
 
                   style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.85),
+                    color: Colors.white.withOpacity( 0.85),
 
                     fontSize: 14,
                   ),
@@ -1475,7 +1475,7 @@ class _DrivingScreenState extends State<DrivingScreen>
 
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF43A047).withValues(alpha: 0.4),
+            color: const Color(0xFF43A047).withOpacity( 0.4),
 
             blurRadius: 20,
 
@@ -1528,7 +1528,7 @@ class _DrivingScreenState extends State<DrivingScreen>
                     destinationName,
 
                     style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.85),
+                      color: Colors.white.withOpacity( 0.85),
 
                       fontSize: 14,
                     ),
@@ -1594,7 +1594,7 @@ class _DrivingScreenState extends State<DrivingScreen>
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
 
       decoration: BoxDecoration(
-        color: surface.withValues(alpha: 0.95),
+        color: surface.withOpacity( 0.95),
 
         borderRadius: BorderRadius.circular(AppRadius.lg),
 
@@ -1828,7 +1828,7 @@ class _DrivingScreenState extends State<DrivingScreen>
           style: TextStyle(
             fontSize: 11,
 
-            color: onSurface.withValues(alpha: 0.7),
+            color: onSurface.withOpacity( 0.7),
           ),
         ),
       ],

@@ -48,7 +48,7 @@ class _OnboardingOverlayState extends State<OnboardingOverlay> {
     final isLast = _step == _steps.length - 1;
 
     return Container(
-      color: Colors.black.withValues(alpha: 0.75),
+      color: Colors.black.withOpacity( 0.75),
       child: SafeArea(
         child: Column(
           children: [
@@ -82,7 +82,7 @@ class _OnboardingOverlayState extends State<OnboardingOverlay> {
                       width: 72,
                       height: 72,
                       decoration: BoxDecoration(
-                        color: AppColors.primary.withValues(alpha: 0.1),
+                        color: AppColors.primary.withOpacity( 0.1),
                         shape: BoxShape.circle,
                       ),
                       child: Icon(
@@ -106,7 +106,7 @@ class _OnboardingOverlayState extends State<OnboardingOverlay> {
                       style: TextStyle(
                         fontSize: 14,
                         color: Theme.of(context).colorScheme.onSurface
-                            .withValues(alpha: 0.7),
+                            .withOpacity( 0.7),
                         height: 1.5,
                       ),
                       textAlign: TextAlign.center,
@@ -126,7 +126,7 @@ class _OnboardingOverlayState extends State<OnboardingOverlay> {
                           decoration: BoxDecoration(
                             color: active
                                 ? AppColors.primary
-                                : AppColors.primary.withValues(alpha: 0.3),
+                                : AppColors.primary.withOpacity( 0.3),
                             borderRadius: BorderRadius.circular(4),
                           ),
                         );

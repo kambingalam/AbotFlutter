@@ -147,7 +147,7 @@ class _SplashScreenState extends State<SplashScreen>
   Color get _statusColor {
     switch (_gpsState) {
       case _GpsState.loading:
-        return _accent.withValues(alpha: 0.45 + _pulseController.value * 0.55);
+        return _accent.withOpacity( 0.45 + _pulseController.value * 0.55);
       case _GpsState.ready:
         return _success;
       case _GpsState.failed:
@@ -173,8 +173,8 @@ class _SplashScreenState extends State<SplashScreen>
                   shape: BoxShape.circle,
                   gradient: RadialGradient(
                     colors: [
-                      _accent.withValues(alpha: 0.10),
-                      _accent.withValues(alpha: 0.025),
+                      _accent.withOpacity( 0.10),
+                      _accent.withOpacity( 0.025),
                       Colors.transparent,
                     ],
                   ),
@@ -195,7 +195,7 @@ class _SplashScreenState extends State<SplashScreen>
                   shape: BoxShape.circle,
                   gradient: RadialGradient(
                     colors: [
-                      _accentDeep.withValues(alpha: 0.12),
+                      _accentDeep.withOpacity( 0.12),
                       Colors.transparent,
                     ],
                   ),
@@ -309,7 +309,7 @@ class _SplashScreenState extends State<SplashScreen>
                             'Abot siap nemenin perjalananmu.',
                             textAlign: TextAlign.center,
                             style: TextStyle(
-                              color: _muted.withValues(alpha: 0.95),
+                              color: _muted.withOpacity( 0.95),
                               fontSize: 14,
                               fontWeight: FontWeight.w400,
                               letterSpacing: 0.3,
@@ -441,7 +441,7 @@ class _RoutePainter extends CustomPainter {
       );
 
     final basePaint = Paint()
-      ..color = muted.withValues(alpha: 0.24)
+      ..color = muted.withOpacity( 0.24)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.5
       ..strokeCap = StrokeCap.round;
@@ -457,7 +457,7 @@ class _RoutePainter extends CustomPainter {
       final end = start + segmentLength;
 
       final activePaint = Paint()
-        ..color = accent.withValues(alpha: 0.9)
+        ..color = accent.withOpacity( 0.9)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2
         ..strokeCap = StrokeCap.round;
@@ -484,7 +484,7 @@ class _RoutePainter extends CustomPainter {
     }
 
     final endpointPaint = Paint()
-      ..color = accent.withValues(alpha: 0.7)
+      ..color = accent.withOpacity( 0.7)
       ..style = PaintingStyle.fill;
 
     canvas.drawCircle(Offset(12, centerY), 3, endpointPaint);

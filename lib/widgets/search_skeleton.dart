@@ -74,9 +74,9 @@ class _SearchSkeletonState extends State<SearchSkeleton>
         shape: BoxShape.circle,
         gradient: LinearGradient(
           colors: [
-            onSurface.withValues(alpha: 0.08),
-            onSurface.withValues(alpha: 0.15),
-            onSurface.withValues(alpha: 0.08),
+            onSurface.withOpacity( 0.08),
+            onSurface.withOpacity( 0.15),
+            onSurface.withOpacity( 0.08),
           ],
           stops: [
             (_controller.value - 0.3).clamp(0.0, 1.0),
@@ -101,9 +101,9 @@ class _SearchSkeletonState extends State<SearchSkeleton>
           borderRadius: BorderRadius.circular(4),
           gradient: LinearGradient(
             colors: [
-              onSurface.withValues(alpha: 0.08),
-              onSurface.withValues(alpha: 0.15),
-              onSurface.withValues(alpha: 0.08),
+              onSurface.withOpacity( 0.08),
+              onSurface.withOpacity( 0.15),
+              onSurface.withOpacity( 0.08),
             ],
             stops: [
               (_controller.value - 0.3).clamp(0.0, 1.0),

@@ -83,18 +83,18 @@ class _TripRouteCardState extends State<TripRouteCard>
           margin: const EdgeInsets.only(bottom: 6),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
-            color: widget.selected ? primary.withValues(alpha: 0.12) : surface,
+            color: widget.selected ? primary.withOpacity( 0.12) : surface,
             borderRadius: BorderRadius.circular(AppRadius.md),
             border: Border.all(
               color: widget.selected
                   ? primary
-                  : onSurface.withValues(alpha: 0.15),
+                  : onSurface.withOpacity( 0.15),
               width: widget.selected ? 2 : 1,
             ),
             boxShadow: widget.selected
                 ? [
                     BoxShadow(
-                      color: primary.withValues(alpha: 0.2),
+                      color: primary.withOpacity( 0.2),
                       blurRadius: 12,
                       offset: const Offset(0, 4),
                     ),
@@ -115,7 +115,7 @@ class _TripRouteCardState extends State<TripRouteCard>
                   key: ValueKey(widget.selected),
                   color: widget.selected
                       ? primary
-                      : onSurface.withValues(alpha: 0.4),
+                      : onSurface.withOpacity( 0.4),
                 ),
               ),
               const SizedBox(width: 12),
@@ -143,7 +143,7 @@ class _TripRouteCardState extends State<TripRouteCard>
                               vertical: 2,
                             ),
                             decoration: BoxDecoration(
-                              color: primary.withValues(alpha: 0.15),
+                              color: primary.withOpacity( 0.15),
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: Text(
@@ -165,7 +165,7 @@ class _TripRouteCardState extends State<TripRouteCard>
                       '${widget.trip.durationMin.toStringAsFixed(0)} menit',
                       style: TextStyle(
                         fontSize: 12,
-                        color: onSurface.withValues(alpha: 0.7),
+                        color: onSurface.withOpacity( 0.7),
                       ),
                     ),
                     if (widget.trip.viaRoads.isNotEmpty) ...[
@@ -174,7 +174,7 @@ class _TripRouteCardState extends State<TripRouteCard>
                         widget.trip.viaRoads,
                         style: TextStyle(
                           fontSize: 11,
-                          color: onSurface.withValues(alpha: 0.5),
+                          color: onSurface.withOpacity( 0.5),
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,

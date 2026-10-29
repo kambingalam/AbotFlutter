@@ -152,7 +152,7 @@ class _ArrivedScreenState extends State<ArrivedScreen>
                       shape: BoxShape.circle,
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.2),
+                          color: Colors.black.withOpacity( 0.2),
                           blurRadius: 30,
                           offset: const Offset(0, 12),
                         ),
@@ -198,7 +198,7 @@ class _ArrivedScreenState extends State<ArrivedScreen>
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.9),
+                          color: Colors.white.withOpacity( 0.9),
                           fontSize: 16,
                         ),
                       ),
@@ -218,7 +218,7 @@ class _ArrivedScreenState extends State<ArrivedScreen>
                   'Makasih ya udah jalan bareng Abot.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.75),
+                    color: Colors.white.withOpacity( 0.75),
                     fontSize: 13,
                     fontStyle: FontStyle.italic,
                   ),
@@ -235,17 +235,17 @@ class _ArrivedScreenState extends State<ArrivedScreen>
                 child: Container(
                   padding: const EdgeInsets.all(AppSpacing.lg),
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.15),
+                    color: Colors.white.withOpacity( 0.15),
                     borderRadius: BorderRadius.circular(AppRadius.lg),
                     border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.2),
+                      color: Colors.white.withOpacity( 0.2),
                     ),
                   ),
                   child: Row(
                     children: [
                       Icon(
                         Icons.checklist_rounded,
-                        color: Colors.white.withValues(alpha: 0.9),
+                        color: Colors.white.withOpacity( 0.9),
                         size: 28,
                       ),
                       const SizedBox(width: 12),
@@ -253,7 +253,7 @@ class _ArrivedScreenState extends State<ArrivedScreen>
                         child: Text(
                           'Pastikan barang bawaan lengkap\ndan pembayaran sudah dilakukan.',
                           style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.9),
+                            color: Colors.white.withOpacity( 0.9),
                             fontSize: 13,
                             height: 1.5,
                           ),

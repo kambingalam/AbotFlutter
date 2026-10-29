@@ -194,7 +194,7 @@ class _NavInstructionCardState extends State<NavInstructionCard>
             borderRadius: BorderRadius.circular(AppRadius.lg),
             boxShadow: [
               BoxShadow(
-                color: cardColor.withValues(alpha: 0.30),
+                color: cardColor.withOpacity( 0.30),
                 blurRadius: _isUrgent ? 20 : 12,
                 offset: const Offset(0, 5),
               ),
@@ -259,7 +259,7 @@ class _NavInstructionCardState extends State<NavInstructionCard>
                       Text(
                         widget.step.road,
                         style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.85),
+                          color: Colors.white.withOpacity( 0.85),
                           fontSize: 14,
                         ),
                         maxLines: 1,

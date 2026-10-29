@@ -34,7 +34,7 @@ class AppRadius {
 class AppShadows {
   static final List<BoxShadow> card = [
     BoxShadow(
-      color: Colors.black.withValues(alpha: 0.08),
+      color: Colors.black.withOpacity( 0.08),
       blurRadius: 12,
       offset: const Offset(0, 4),
     ),
@@ -42,7 +42,7 @@ class AppShadows {
 
   static final List<BoxShadow> floating = [
     BoxShadow(
-      color: Colors.black.withValues(alpha: 0.15),
+      color: Colors.black.withOpacity( 0.15),
       blurRadius: 20,
       offset: const Offset(0, 6),
     ),
@@ -104,7 +104,7 @@ ThemeData buildAppTheme() {
         textStyle: const TextStyle(fontWeight: FontWeight.w600),
       ),
     ),
-    cardTheme: CardThemeData(
+    cardTheme: CardTheme(
       color: AppColors.surface,
       elevation: 0,
       shape: RoundedRectangleBorder(
@@ -186,7 +186,7 @@ ThemeData buildAppDarkTheme() {
         textStyle: const TextStyle(fontWeight: FontWeight.w600),
       ),
     ),
-    cardTheme: CardThemeData(
+    cardTheme: CardTheme(
       color: base.colorScheme.surface,
       elevation: 0,
       shape: RoundedRectangleBorder(
@@ -195,7 +195,7 @@ ThemeData buildAppDarkTheme() {
       margin: EdgeInsets.zero,
     ),
     dividerTheme: DividerThemeData(
-      color: base.colorScheme.onSurface.withValues(alpha: 0.15),
+      color: base.colorScheme.onSurface.withOpacity( 0.15),
       thickness: 1,
       space: 1,
     ),

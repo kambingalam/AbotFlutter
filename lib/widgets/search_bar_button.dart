@@ -24,14 +24,14 @@ class SearchBarButton extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Icon(Icons.search, color: onSurface.withValues(alpha: 0.6)),
+            Icon(Icons.search, color: onSurface.withOpacity( 0.6)),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
                 text ?? 'Mau ke mana hari ini?',
                 style: TextStyle(
                   color: text == null
-                      ? onSurface.withValues(alpha: 0.6)
+                      ? onSurface.withOpacity( 0.6)
                       : onSurface,
                   fontSize: 16,
                   fontWeight: FontWeight.w500,
@@ -40,7 +40,7 @@ class SearchBarButton extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-            Icon(Icons.mic, color: onSurface.withValues(alpha: 0.6)),
+            Icon(Icons.mic, color: onSurface.withOpacity( 0.6)),
           ],
         ),
       ),

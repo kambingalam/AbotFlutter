@@ -30,12 +30,12 @@ class SearchEmptyState extends StatelessWidget {
               height: 120,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: onSurface.withValues(alpha: 0.05),
+                color: onSurface.withOpacity( 0.05),
               ),
               child: Center(
                 child: AbotFace(
                   size: 80,
-                  color: AppColors.primary.withValues(alpha: 0.6),
+                  color: AppColors.primary.withOpacity( 0.6),
                   blinkInterval: const Duration(seconds: 3),
                 ),
               ),
@@ -57,7 +57,7 @@ class SearchEmptyState extends StatelessWidget {
               subtitle ?? 'Coba kata kunci lain atau lebih spesifik',
               style: TextStyle(
                 fontSize: 13,
-                color: onSurface.withValues(alpha: 0.6),
+                color: onSurface.withOpacity( 0.6),
               ),
               textAlign: TextAlign.center,
             ),
