@@ -146,89 +146,85 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _testMqtt() async {
-  if (_mqttBusy) return;
+    if (_mqttBusy) return;
 
-  setState(() {
-    _mqttBusy = true;
-    _mqttStatus = 'Menghubungkan ke broker MQTT...';
-  });
+    setState(() {
+      _mqttBusy = true;
+      _mqttStatus = 'Menghubungkan ke broker MQTT...';
+    });
 
-  StreamSubscription<AbotMqttState>? stateSubscription;
+    StreamSubscription<AbotMqttState>? stateSubscription;
 
-  try {
-    final mqtt = context.read<AbotMqttService>();
+    try {
+      final mqtt = context.read<AbotMqttService>();
 
-    if (!mqtt.isConnected) {
-      await mqtt.connect();
-    }
-
-    if (!mounted) return;
-
-    // Tunggu AUTH selesai jika belum ready.
-    if (!mqtt.isReady) {
-      setState(() {
-        _mqttStatus = 'Menunggu autentikasi ESP32...';
-      });
-
-      final completer = Completer<void>();
-
-      stateSubscription = mqtt.states.listen((state) {
-        if (state == AbotMqttState.ready) {
-          if (!completer.isCompleted) {
-            completer.complete();
-          }
-        } else if (state == AbotMqttState.authFailed ||
-            state == AbotMqttState.deviceOffline ||
-            state == AbotMqttState.disconnected) {
-          if (!completer.isCompleted) {
-            completer.completeError(
-              StateError('Autentikasi gagal: $state'),
-            );
-          }
-        }
-      });
-
-      // Periksa lagi setelah listener dipasang untuk menghindari race.
-      if (mqtt.isReady && !completer.isCompleted) {
-        completer.complete();
+      if (!mqtt.isConnected) {
+        await mqtt.connect();
       }
 
-      await completer.future.timeout(
-        const Duration(seconds: 15),
-        onTimeout: () {
-          throw TimeoutException(
-            'Timeout menunggu ESP32 terautentikasi',
-          );
-        },
-      );
-    }
+      if (!mounted) return;
 
-    if (!mounted) return;
+      // Tunggu AUTH selesai jika belum ready.
+      if (!mqtt.isReady) {
+        setState(() {
+          _mqttStatus = 'Menunggu autentikasi ESP32...';
+        });
 
-    // Pastikan state masih ready sebelum mengirim PING.
-    if (!mqtt.isReady) {
-      throw StateError('ESP32 belum terautentikasi');
-    }
+        final completer = Completer<void>();
 
-    mqtt.ping();
+        stateSubscription = mqtt.states.listen((state) {
+          if (state == AbotMqttState.ready) {
+            if (!completer.isCompleted) {
+              completer.complete();
+            }
+          } else if (state == AbotMqttState.authFailed ||
+              state == AbotMqttState.deviceOffline ||
+              state == AbotMqttState.disconnected) {
+            if (!completer.isCompleted) {
+              completer.completeError(StateError('Autentikasi gagal: $state'));
+            }
+          }
+        });
 
-    setState(() {
-      _mqttStatus = 'PING terkirim — menunggu PONG...';
-    });
-  } catch (error) {
-    if (!mounted) return;
+        // Periksa lagi setelah listener dipasang untuk menghindari race.
+        if (mqtt.isReady && !completer.isCompleted) {
+          completer.complete();
+        }
 
-    setState(() {
-      _mqttStatus = 'Gagal MQTT: $error';
-    });
-  } finally {
-    await stateSubscription?.cancel();
+        await completer.future.timeout(
+          const Duration(seconds: 15),
+          onTimeout: () {
+            throw TimeoutException('Timeout menunggu ESP32 terautentikasi');
+          },
+        );
+      }
 
-    if (mounted) {
-      setState(() => _mqttBusy = false);
+      if (!mounted) return;
+
+      // Pastikan state masih ready sebelum mengirim PING.
+      if (!mqtt.isReady) {
+        throw StateError('ESP32 belum terautentikasi');
+      }
+
+      mqtt.ping();
+
+      setState(() {
+        _mqttStatus = 'PING terkirim — menunggu PONG...';
+      });
+    } catch (error) {
+      if (!mounted) return;
+
+      setState(() {
+        _mqttStatus = 'Gagal MQTT: $error';
+      });
+    } finally {
+      await stateSubscription?.cancel();
+
+      if (mounted) {
+        setState(() => _mqttBusy = false);
+      }
     }
   }
-}
 
   void _showSnack(String msg) {
     if (!mounted) return;
