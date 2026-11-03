@@ -317,7 +317,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     height: 60,
                     child: Container(
                       decoration: BoxDecoration(
-                        color: AppColors.primary.withOpacity( 0.2),
+                        color: AppColors.primary.withValues( alpha: 0.2),
                         shape: BoxShape.circle,
                       ),
                       child: const Center(

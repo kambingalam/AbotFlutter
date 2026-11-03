@@ -175,7 +175,7 @@ class _AnimatedDriverMarkerState extends State<AnimatedDriverMarker>
                   width: widget.size,
                   height: widget.size,
                   decoration: BoxDecoration(
-                    color: AppColors.primary.withOpacity(opacity),
+                    color: AppColors.primary.withValues(alpha: opacity),
                     shape: BoxShape.circle,
                   ),
                 ),
@@ -192,7 +192,7 @@ class _AnimatedDriverMarkerState extends State<AnimatedDriverMarker>
               size: widget.size,
               shadows: [
                 Shadow(
-                  color: Colors.black.withOpacity( 0.3),
+                  color: Colors.black.withValues( alpha: 0.3),
                   blurRadius: 8,
                   offset: const Offset(0, 2),
                 ),
