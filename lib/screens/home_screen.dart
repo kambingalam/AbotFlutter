@@ -1,4 +1,3 @@
-
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -110,10 +109,7 @@ class _HomeScreenState extends State<HomeScreen> {
       return LatLng(pos.latitude, pos.longitude);
     }
 
-    return const LatLng(
-      AppConfig.defaultLat,
-      AppConfig.defaultLon,
-    );
+    return const LatLng(AppConfig.defaultLat, AppConfig.defaultLon);
   }
 
   void _moveToUser(LatLng userPos) {
@@ -138,9 +134,7 @@ class _HomeScreenState extends State<HomeScreen> {
       } else {
         final ok = await ble.connectMock();
 
-        _showSnack(
-          ok ? 'ABOT terhubung (mock)' : 'Gagal',
-        );
+        _showSnack(ok ? 'ABOT terhubung (mock)' : 'Gagal');
       }
     } catch (error) {
       _showSnack('Koneksi mock gagal: $error');
@@ -152,48 +146,95 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _testMqtt() async {
-    if (_mqttBusy) return;
+  if (_mqttBusy) return;
+
+  setState(() {
+    _mqttBusy = true;
+    _mqttStatus = 'Menghubungkan ke broker MQTT...';
+  });
+
+  StreamSubscription<AbotMqttState>? stateSubscription;
+
+  try {
+    final mqtt = context.read<AbotMqttService>();
+
+    if (!mqtt.isConnected) {
+      await mqtt.connect();
+    }
+
+    if (!mounted) return;
+
+    // Tunggu AUTH selesai jika belum ready.
+    if (!mqtt.isReady) {
+      setState(() {
+        _mqttStatus = 'Menunggu autentikasi ESP32...';
+      });
+
+      final completer = Completer<void>();
+
+      stateSubscription = mqtt.states.listen((state) {
+        if (state == AbotMqttState.ready) {
+          if (!completer.isCompleted) {
+            completer.complete();
+          }
+        } else if (state == AbotMqttState.authFailed ||
+            state == AbotMqttState.deviceOffline ||
+            state == AbotMqttState.disconnected) {
+          if (!completer.isCompleted) {
+            completer.completeError(
+              StateError('Autentikasi gagal: $state'),
+            );
+          }
+        }
+      });
+
+      // Periksa lagi setelah listener dipasang untuk menghindari race.
+      if (mqtt.isReady && !completer.isCompleted) {
+        completer.complete();
+      }
+
+      await completer.future.timeout(
+        const Duration(seconds: 15),
+        onTimeout: () {
+          throw TimeoutException(
+            'Timeout menunggu ESP32 terautentikasi',
+          );
+        },
+      );
+    }
+
+    if (!mounted) return;
+
+    // Pastikan state masih ready sebelum mengirim PING.
+    if (!mqtt.isReady) {
+      throw StateError('ESP32 belum terautentikasi');
+    }
+
+    mqtt.ping();
 
     setState(() {
-      _mqttBusy = true;
-      _mqttStatus = 'Menghubungkan ke broker MQTT...';
+      _mqttStatus = 'PING terkirim — menunggu PONG...';
     });
+  } catch (error) {
+    if (!mounted) return;
 
-    try {
-      final mqtt = context.read<AbotMqttService>();
+    setState(() {
+      _mqttStatus = 'Gagal MQTT: $error';
+    });
+  } finally {
+    await stateSubscription?.cancel();
 
-      if (!mqtt.isConnected) {
-        await mqtt.connect();
-      }
-
-      if (!mounted) return;
-
-      mqtt.ping();
-
-      setState(() {
-        _mqttStatus = 'PING terkirim — menunggu PONG...';
-      });
-    } catch (error) {
-      if (!mounted) return;
-
-      setState(() {
-        _mqttStatus = 'Gagal MQTT: $error';
-      });
-    } finally {
-      if (mounted) {
-        setState(() => _mqttBusy = false);
-      }
+    if (mounted) {
+      setState(() => _mqttBusy = false);
     }
   }
+}
 
   void _showSnack(String msg) {
     if (!mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(msg),
-        duration: const Duration(seconds: 2),
-      ),
+      SnackBar(content: Text(msg), duration: const Duration(seconds: 2)),
     );
   }
 
@@ -202,27 +243,20 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final result = await Navigator.of(context).push<Place>(
       MaterialPageRoute(
-        builder: (_) => SearchScreen(
-          currentPosition: manager.lastPosition,
-        ),
+        builder: (_) => SearchScreen(currentPosition: manager.lastPosition),
       ),
     );
 
     if (result == null || !mounted) return;
 
     Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => PreviewScreen(destination: result),
-      ),
+      MaterialPageRoute(builder: (_) => PreviewScreen(destination: result)),
     );
   }
 
   Future<void> _openSettings() async {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => const SettingsScreen(),
-      ),
-    );
+    Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => const SettingsScreen()));
   }
 
   Future<void> _finishOnboarding() async {
@@ -250,8 +284,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final userPos = _userLatLng(manager);
     final surface = Theme.of(context).colorScheme.surface;
 
-    final mqttResponded =
-        _mqttStatus.contains('PONG diterima');
+    final mqttResponded = _mqttStatus.contains('PONG diterima');
 
     return Scaffold(
       body: Stack(
@@ -321,9 +354,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     const SizedBox(
                       width: 24,
                       height: 24,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2.5,
-                      ),
+                      child: CircularProgressIndicator(strokeWidth: 2.5),
                     ),
                   const SizedBox(width: 8),
                   _circleButton(
@@ -349,8 +380,7 @@ class _HomeScreenState extends State<HomeScreen> {
           Positioned(
             left: AppSpacing.lg,
             right: AppSpacing.lg,
-            bottom:
-                150 + MediaQuery.of(context).padding.bottom,
+            bottom: 150 + MediaQuery.of(context).padding.bottom,
             child: Material(
               color: surface,
               elevation: 3,
@@ -363,26 +393,19 @@ class _HomeScreenState extends State<HomeScreen> {
                   children: [
                     Row(
                       children: [
-                        Icon(
-                          Icons.developer_board,
-                          color: AppColors.primary,
-                        ),
+                        Icon(Icons.developer_board, color: AppColors.primary),
                         const SizedBox(width: 8),
                         const Expanded(
                           child: Text(
                             'ESP32-S3 · MQTT Test',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                            ),
+                            style: TextStyle(fontWeight: FontWeight.bold),
                           ),
                         ),
                         Icon(
                           mqttResponded
                               ? Icons.check_circle
                               : Icons.circle_outlined,
-                          color: mqttResponded
-                              ? Colors.green
-                              : Colors.grey,
+                          color: mqttResponded ? Colors.green : Colors.grey,
                         ),
                       ],
                     ),
@@ -416,9 +439,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               )
                             : const Icon(Icons.send),
                         label: Text(
-                          _mqttBusy
-                              ? 'Memproses...'
-                              : 'Kirim PING ke ESP32',
+                          _mqttBusy ? 'Memproses...' : 'Kirim PING ke ESP32',
                         ),
                       ),
                     ),
@@ -451,17 +472,14 @@ class _HomeScreenState extends State<HomeScreen> {
           Positioned(
             left: AppSpacing.lg,
             right: AppSpacing.lg,
-            bottom:
-                AppSpacing.lg + MediaQuery.of(context).padding.bottom,
+            bottom: AppSpacing.lg + MediaQuery.of(context).padding.bottom,
             child: SearchBarButton(onTap: _openSearch),
           ),
 
           // Onboarding.
           if (_showOnboarding)
             Positioned.fill(
-              child: OnboardingOverlay(
-                onFinished: _finishOnboarding,
-              ),
+              child: OnboardingOverlay(onFinished: _finishOnboarding),
             ),
         ],
       ),
@@ -524,10 +542,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return Material(
       color: Colors.transparent,
       child: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: 12,
-          vertical: 10,
-        ),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
           color: color,
           borderRadius: BorderRadius.circular(AppRadius.md),
@@ -574,11 +589,7 @@ class _HomeScreenState extends State<HomeScreen> {
           shape: BoxShape.circle,
           boxShadow: AppShadows.card,
         ),
-        child: Icon(
-          icon,
-          color: AppColors.primary,
-          size: 22,
-        ),
+        child: Icon(icon, color: AppColors.primary, size: 22),
       ),
     );
   }

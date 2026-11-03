@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../services/haptic_service.dart';
 import '../services/settings_service.dart';
 import '../services/tts_service.dart';
+import '../widgets/firmware_ota_card.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -133,6 +135,21 @@ class SettingsScreen extends StatelessWidget {
               settings.setBackgroundMode(v);
             },
           ),
+
+          // ============================================================
+          // FIRMWARE UPDATE (OTA)
+          // ============================================================
+          _SectionHeader(
+            icon: Icons.system_update_rounded,
+            title: 'Firmware Update',
+          ),
+          const ListTile(
+            leading: Icon(Icons.memory_rounded),
+            title: Text('Firmware ESP32'),
+            subtitle: Text('Versi saat ini: 3.45 (Wokwi)'),
+            trailing: Chip(label: Text('Simulasi')),
+          ),
+          const FirmwareOtaCard(),
 
           // ============================================================
           // SIMULATOR
