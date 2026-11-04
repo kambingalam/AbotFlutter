@@ -16,6 +16,7 @@ import 'services/settings_service.dart';
 import 'services/trip_manager.dart';
 import 'services/tts_service.dart';
 import 'theme/app_theme.dart';
+import 'services/ota_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();

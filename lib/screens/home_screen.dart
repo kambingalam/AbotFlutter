@@ -5,13 +5,13 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
-import '../services/abot_mqtt_service.dart';
-import '../services/tile_cache_service.dart';
 import '../config/app_config.dart';
 import '../models/place.dart';
+import '../services/abot_mqtt_service.dart';
 import '../services/gps_service.dart';
 import '../services/mock_ble_service.dart';
 import '../services/settings_service.dart';
+import '../services/tile_cache_service.dart';
 import '../services/trip_manager.dart';
 import '../theme/app_theme.dart';
 import '../widgets/abot_status_chip.dart';
@@ -29,16 +29,21 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  static const Duration _pongTimeout = Duration(seconds: 5);
+
   final MapController _map = MapController();
 
   bool _connecting = false;
   bool _followUser = true;
   bool _showOnboarding = false;
+  LatLng? _lastFollowed;
 
   StreamSubscription<Map<String, dynamic>>? _mqttSubscription;
+  Timer? _pongTimer;
 
   String _mqttStatus = 'Belum diuji';
   bool _mqttBusy = false;
+  bool _mqttResponded = false;
   DateTime? _mqttLastResponse;
 
   @override
@@ -48,9 +53,9 @@ class _HomeScreenState extends State<HomeScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
 
-      final settings = context.read<SettingsService>();
+      final settingsService = context.read<SettingsService>();
 
-      if (!settings.onboardingDone) {
+      if (!settingsService.onboardingDone) {
         setState(() => _showOnboarding = true);
       }
 
@@ -58,6 +63,9 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
+  // ============================================================
+  // MQTT
+  // ============================================================
   void _listenToMqtt() {
     if (_mqttSubscription != null) return;
 
@@ -70,38 +78,87 @@ class _HomeScreenState extends State<HomeScreen> {
         final type = message['t']?.toString() ?? 'unknown';
 
         setState(() {
+          _mqttLastResponse = DateTime.now();
+
           switch (type) {
             case 'pong':
+              _pongTimer?.cancel();
+              _mqttResponded = true;
               _mqttStatus = 'PONG diterima — ESP32 merespons';
-              _mqttLastResponse = DateTime.now();
               break;
 
             case 'hb':
               _mqttStatus = 'Heartbeat ESP32 diterima';
-              _mqttLastResponse = DateTime.now();
               break;
 
             case 'status':
               _mqttStatus = 'Status ESP32 diterima';
-              _mqttLastResponse = DateTime.now();
               break;
 
             default:
               _mqttStatus = 'Pesan diterima: $type';
-              _mqttLastResponse = DateTime.now();
           }
         });
       },
       onError: (Object error) {
         if (!mounted) return;
 
-        setState(() {
-          _mqttStatus = 'Stream MQTT error: $error';
-        });
+        setState(() => _mqttStatus = 'Stream MQTT error: $error');
       },
     );
   }
 
+  Future<void> _testMqtt() async {
+    if (_mqttBusy) return;
+
+    final mqtt = context.read<AbotMqttService>();
+
+    setState(() {
+      _mqttBusy = true;
+      _mqttResponded = false;
+      _mqttStatus = 'Menghubungkan ke broker MQTT...';
+    });
+
+    try {
+      // Connect + authentication + retry jika autentikasi sebelumnya gagal.
+      setState(() => _mqttStatus = 'Menunggu autentikasi ESP32...');
+
+      await mqtt.connectAndAuthenticate(
+        timeout: const Duration(seconds: 15),
+      );
+
+      if (!mounted) return;
+
+      if (!mqtt.isReady) {
+        throw StateError('ESP32 belum terautentikasi');
+      }
+
+      mqtt.ping();
+
+      setState(() => _mqttStatus = 'PING terkirim — menunggu PONG...');
+
+      // Hindari status menggantung jika PONG tidak diterima.
+      _pongTimer?.cancel();
+
+      _pongTimer = Timer(_pongTimeout, () {
+        if (!mounted || _mqttResponded) return;
+
+        setState(() => _mqttStatus = 'Tidak ada PONG (timeout)');
+      });
+    } catch (error) {
+      if (!mounted) return;
+
+      setState(() => _mqttStatus = 'Gagal MQTT: $error');
+    } finally {
+      if (mounted) {
+        setState(() => _mqttBusy = false);
+      }
+    }
+  }
+
+  // ============================================================
+  // MAP / GPS
+  // ============================================================
   LatLng _userLatLng(TripManager manager) {
     final pos = manager.lastPosition;
 
@@ -109,7 +166,10 @@ class _HomeScreenState extends State<HomeScreen> {
       return LatLng(pos.latitude, pos.longitude);
     }
 
-    return const LatLng(AppConfig.defaultLat, AppConfig.defaultLon);
+    return const LatLng(
+      AppConfig.defaultLat,
+      AppConfig.defaultLon,
+    );
   }
 
   void _moveToUser(LatLng userPos) {
@@ -117,9 +177,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
     try {
       _map.move(userPos, _map.camera.zoom);
-    } catch (_) {}
+    } catch (_) {
+      // Map belum siap; onMapReady akan menanganinya.
+    }
   }
 
+  // ============================================================
+  // ACTIONS
+  // ============================================================
   Future<void> _connectMock() async {
     if (_connecting) return;
 
@@ -145,92 +210,14 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<void> _testMqtt() async {
-    if (_mqttBusy) return;
-
-    setState(() {
-      _mqttBusy = true;
-      _mqttStatus = 'Menghubungkan ke broker MQTT...';
-    });
-
-    StreamSubscription<AbotMqttState>? stateSubscription;
-
-    try {
-      final mqtt = context.read<AbotMqttService>();
-
-      if (!mqtt.isConnected) {
-        await mqtt.connect();
-      }
-
-      if (!mounted) return;
-
-      // Tunggu AUTH selesai jika belum ready.
-      if (!mqtt.isReady) {
-        setState(() {
-          _mqttStatus = 'Menunggu autentikasi ESP32...';
-        });
-
-        final completer = Completer<void>();
-
-        stateSubscription = mqtt.states.listen((state) {
-          if (state == AbotMqttState.ready) {
-            if (!completer.isCompleted) {
-              completer.complete();
-            }
-          } else if (state == AbotMqttState.authFailed ||
-              state == AbotMqttState.deviceOffline ||
-              state == AbotMqttState.disconnected) {
-            if (!completer.isCompleted) {
-              completer.completeError(StateError('Autentikasi gagal: $state'));
-            }
-          }
-        });
-
-        // Periksa lagi setelah listener dipasang untuk menghindari race.
-        if (mqtt.isReady && !completer.isCompleted) {
-          completer.complete();
-        }
-
-        await completer.future.timeout(
-          const Duration(seconds: 15),
-          onTimeout: () {
-            throw TimeoutException('Timeout menunggu ESP32 terautentikasi');
-          },
-        );
-      }
-
-      if (!mounted) return;
-
-      // Pastikan state masih ready sebelum mengirim PING.
-      if (!mqtt.isReady) {
-        throw StateError('ESP32 belum terautentikasi');
-      }
-
-      mqtt.ping();
-
-      setState(() {
-        _mqttStatus = 'PING terkirim — menunggu PONG...';
-      });
-    } catch (error) {
-      if (!mounted) return;
-
-      setState(() {
-        _mqttStatus = 'Gagal MQTT: $error';
-      });
-    } finally {
-      await stateSubscription?.cancel();
-
-      if (mounted) {
-        setState(() => _mqttBusy = false);
-      }
-    }
-  }
-
   void _showSnack(String msg) {
     if (!mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), duration: const Duration(seconds: 2)),
+      SnackBar(
+        content: Text(msg),
+        duration: const Duration(seconds: 2),
+      ),
     );
   }
 
@@ -239,26 +226,33 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final result = await Navigator.of(context).push<Place>(
       MaterialPageRoute(
-        builder: (_) => SearchScreen(currentPosition: manager.lastPosition),
+        builder: (_) => SearchScreen(
+          currentPosition: manager.lastPosition,
+        ),
       ),
     );
 
     if (result == null || !mounted) return;
 
     Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => PreviewScreen(destination: result)),
+      MaterialPageRoute(
+        builder: (_) => PreviewScreen(destination: result),
+      ),
     );
   }
 
-  Future<void> _openSettings() async {
-    Navigator.of(context)
-        .push(MaterialPageRoute(builder: (_) => const SettingsScreen()));
+  void _openSettings() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const SettingsScreen(),
+      ),
+    );
   }
 
   Future<void> _finishOnboarding() async {
-    final settings = context.read<SettingsService>();
+    final settingsService = context.read<SettingsService>();
 
-    await settings.setOnboardingDone(true);
+    await settingsService.setOnboardingDone(true);
 
     if (!mounted) return;
 
@@ -267,11 +261,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
+    _pongTimer?.cancel();
     _mqttSubscription?.cancel();
     _map.dispose();
+
     super.dispose();
   }
 
+  // ============================================================
+  // BUILD
+  // ============================================================
   @override
   Widget build(BuildContext context) {
     final manager = context.watch<TripManager>();
@@ -279,8 +278,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final userPos = _userLatLng(manager);
     final surface = Theme.of(context).colorScheme.surface;
+    final padding = MediaQuery.of(context).padding;
 
-    final mqttResponded = _mqttStatus.contains('PONG diterima');
+    // Kamera mengikuti posisi pengguna setiap posisi berubah.
+    if (_followUser && _lastFollowed != userPos) {
+      _lastFollowed = userPos;
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _moveToUser(userPos);
+      });
+    }
 
     return Scaffold(
       body: Stack(
@@ -297,7 +304,7 @@ class _HomeScreenState extends State<HomeScreen> {
               },
               onMapReady: () {
                 WidgetsBinding.instance.addPostFrameCallback((_) {
-                  _moveToUser(userPos);
+                  if (mounted) _moveToUser(userPos);
                 });
               },
             ),
@@ -305,6 +312,7 @@ class _HomeScreenState extends State<HomeScreen> {
               TileLayer(
                 urlTemplate:
                     'https://tile-a.openstreetmap.fr/hot/{z}/{x}/{y}.png',
+                // TODO: ganti dengan application ID asli sebelum rilis.
                 userAgentPackageName: 'com.example.abot_drivers',
                 maxZoom: 19,
                 tileProvider: TileCacheService.tileProvider,
@@ -317,7 +325,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     height: 60,
                     child: Container(
                       decoration: BoxDecoration(
-                        color: AppColors.primary.withValues( alpha: 0.2),
+                        color: AppColors.primary.withValues(alpha: 0.2),
                         shape: BoxShape.circle,
                       ),
                       child: const Center(
@@ -334,7 +342,9 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
 
-          // Top bar: status mock BLE dan tombol pengaturan.
+          // ======================================================
+          // TOP BAR
+          // ======================================================
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.all(AppSpacing.lg),
@@ -350,7 +360,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     const SizedBox(
                       width: 24,
                       height: 24,
-                      child: CircularProgressIndicator(strokeWidth: 2.5),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.5,
+                      ),
                     ),
                   const SizedBox(width: 8),
                   _circleButton(
@@ -363,20 +375,24 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
 
-          // Banner GPS.
+          // ======================================================
+          // GPS BANNER
+          // ======================================================
           if (manager.gpsStatus != GpsStatus.ready)
             Positioned(
-              top: 80 + MediaQuery.of(context).padding.top,
+              top: 80 + padding.top,
               left: AppSpacing.lg,
               right: AppSpacing.lg,
               child: _gpsBanner(manager),
             ),
 
-          // Panel pengujian MQTT ESP32-S3.
+          // ======================================================
+          // MQTT TEST PANEL
+          // ======================================================
           Positioned(
             left: AppSpacing.lg,
             right: AppSpacing.lg,
-            bottom: 150 + MediaQuery.of(context).padding.bottom,
+            bottom: 150 + padding.bottom,
             child: Material(
               color: surface,
               elevation: 3,
@@ -389,19 +405,24 @@ class _HomeScreenState extends State<HomeScreen> {
                   children: [
                     Row(
                       children: [
-                        Icon(Icons.developer_board, color: AppColors.primary),
+                        const Icon(
+                          Icons.developer_board,
+                          color: AppColors.primary,
+                        ),
                         const SizedBox(width: 8),
                         const Expanded(
                           child: Text(
                             'ESP32-S3 · MQTT Test',
-                            style: TextStyle(fontWeight: FontWeight.bold),
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
                         Icon(
-                          mqttResponded
+                          _mqttResponded
                               ? Icons.check_circle
                               : Icons.circle_outlined,
-                          color: mqttResponded ? Colors.green : Colors.grey,
+                          color: _mqttResponded ? Colors.green : Colors.grey,
                         ),
                       ],
                     ),
@@ -414,9 +435,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       const SizedBox(height: 3),
                       Text(
                         'Respons terakhir: '
-                        '${_mqttLastResponse!.hour.toString().padLeft(2, '0')}:'
-                        '${_mqttLastResponse!.minute.toString().padLeft(2, '0')}:'
-                        '${_mqttLastResponse!.second.toString().padLeft(2, '0')}',
+                        '${_formatTime(_mqttLastResponse!)}',
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ],
@@ -445,7 +464,9 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
 
-          // Tombol recenter.
+          // ======================================================
+          // RECENTER BUTTON
+          // ======================================================
           Positioned(
             right: AppSpacing.lg,
             bottom: 85,
@@ -454,7 +475,10 @@ class _HomeScreenState extends State<HomeScreen> {
               foregroundColor: AppColors.primary,
               elevation: 2,
               onPressed: () {
-                setState(() => _followUser = true);
+                setState(() {
+                  _followUser = true;
+                  _lastFollowed = userPos;
+                });
 
                 try {
                   _map.move(userPos, 15);
@@ -464,18 +488,24 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
 
-          // Search bar.
+          // ======================================================
+          // SEARCH BAR
+          // ======================================================
           Positioned(
             left: AppSpacing.lg,
             right: AppSpacing.lg,
-            bottom: AppSpacing.lg + MediaQuery.of(context).padding.bottom,
+            bottom: AppSpacing.lg + padding.bottom,
             child: SearchBarButton(onTap: _openSearch),
           ),
 
-          // Onboarding.
+          // ======================================================
+          // ONBOARDING
+          // ======================================================
           if (_showOnboarding)
             Positioned.fill(
-              child: OnboardingOverlay(onFinished: _finishOnboarding),
+              child: OnboardingOverlay(
+                onFinished: _finishOnboarding,
+              ),
             ),
         ],
       ),
@@ -483,21 +513,25 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // ============================================================
-  // GPS BANNER
+  // HELPERS
   // ============================================================
+  String _formatTime(DateTime t) {
+    String two(int n) => n.toString().padLeft(2, '0');
+
+    return '${two(t.hour)}:${two(t.minute)}:${two(t.second)}';
+  }
 
   Widget _gpsBanner(TripManager manager) {
     final status = manager.gpsStatus;
-
-    if (status == GpsStatus.ready) {
-      return const SizedBox.shrink();
-    }
 
     String message;
     IconData icon;
     Color color;
 
     switch (status) {
+      case GpsStatus.ready:
+        return const SizedBox.shrink();
+
       case GpsStatus.permissionDenied:
         message = 'Izin lokasi ditolak';
         icon = Icons.location_disabled;
@@ -538,7 +572,10 @@ class _HomeScreenState extends State<HomeScreen> {
     return Material(
       color: Colors.transparent,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        padding: const EdgeInsets.symmetric(
+          horizontal: 12,
+          vertical: 10,
+        ),
         decoration: BoxDecoration(
           color: color,
           borderRadius: BorderRadius.circular(AppRadius.md),
@@ -566,10 +603,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // ============================================================
-  // CIRCLE BUTTON
-  // ============================================================
-
   Widget _circleButton({
     required Color surface,
     required IconData icon,
@@ -585,7 +618,11 @@ class _HomeScreenState extends State<HomeScreen> {
           shape: BoxShape.circle,
           boxShadow: AppShadows.card,
         ),
-        child: Icon(icon, color: AppColors.primary, size: 22),
+        child: Icon(
+          icon,
+          color: AppColors.primary,
+          size: 22,
+        ),
       ),
     );
   }

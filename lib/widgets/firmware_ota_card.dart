@@ -1,109 +1,157 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
-import '../services/abot_mqtt_service.dart';
 import '../services/haptic_service.dart';
+import '../services/ota_service.dart';
 
-class FirmwareOtaCard extends StatefulWidget {
+/// Kartu update firmware. Seluruh logika ada di [OtaService]; widget ini
+/// hanya menampilkan state dan meneruskan aksi pengguna.
+class FirmwareOtaCard extends StatelessWidget {
   const FirmwareOtaCard({super.key});
 
-  @override
-  State<FirmwareOtaCard> createState() => _FirmwareOtaCardState();
-}
-
-class _FirmwareOtaCardState extends State<FirmwareOtaCard> {
-  late final AbotMqttService _mqtt;
-
-  StreamSubscription<Map<String, dynamic>>? _subscription;
-
-  bool _busy = false;
-  bool _completed = false;
-  double _progress = 0;
-  String _status = 'Siap diuji melalui MQTT';
-
-  @override
-  void initState() {
-    super.initState();
-
-    _mqtt = AbotMqttService();
-    _subscription = _mqtt.messages.listen(_handleMessage);
-  }
-
-  void _handleMessage(Map<String, dynamic> message) {
-    if (!mounted) return;
-
-    final type = message['t']?.toString();
-
-    if (type == 'ota_progress') {
-      final value = message['progress'];
-      final progress = value is num ? value.toDouble() : 0.0;
-
-      setState(() {
-        _busy = true;
-        _progress = (progress / 100).clamp(0.0, 1.0);
-        _status = 'Proses update: ${progress.toStringAsFixed(0)}%';
-      });
-    } else if (type == 'ota_simulated') {
-      setState(() {
-        _busy = false;
-        _completed = true;
-        _progress = 1;
-        _status = 'Simulasi OTA berhasil';
-      });
-    } else if (type == 'ota_error') {
-      setState(() {
-        _busy = false;
-        _completed = false;
-        _status = message['message']?.toString() ?? 'OTA gagal';
-      });
-    }
-  }
-
-  Future<void> _startOta() async {
-    if (_busy) return;
-
+  Future<void> _check(BuildContext context, OtaService ota) async {
     await HapticService.select();
 
-    setState(() {
-      _busy = true;
-      _completed = false;
-      _progress = 0;
-      _status = 'Menghubungkan ke MQTT...';
-    });
+    if (ota.phase == OtaPhase.failed || ota.phase == OtaPhase.success) {
+      ota.reset();
+    }
 
-    try {
-      await _mqtt.connect();
+    await ota.checkForUpdate();
+  }
 
-      if (!mounted) return;
+  Future<void> _confirmAndStart(BuildContext context, OtaService ota) async {
+    final manifest = ota.manifest;
+    if (manifest == null) return;
 
-      _mqtt.publishJson({'t': 'ota_start', 'token': 'abot-secret-2025'});
+    await HapticService.select();
+    if (!context.mounted) return;
 
-      setState(() {
-        _status = 'Perintah OTA terkirim. Menunggu ESP32...';
-      });
-    } catch (error) {
-      if (!mounted) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Update ke v${manifest.version}?'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (manifest.notes.isNotEmpty) ...[
+                const Text(
+                  'Yang baru:',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 4),
+                for (final note in manifest.notes) Text('• $note'),
+                const SizedBox(height: 12),
+              ],
+              const Text(
+                'ABOT akan restart setelah update. Jangan matikan ABOT dan '
+                'pastikan tidak sedang dalam perjalanan.',
+              ),
+              if (ota.isSimulated) ...[
+                const SizedBox(height: 12),
+                const Text(
+                  'Mode simulasi: tidak ada firmware yang diunduh.',
+                  style: TextStyle(fontStyle: FontStyle.italic),
+                ),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Update'),
+          ),
+        ],
+      ),
+    );
 
-      setState(() {
-        _busy = false;
-        _status = 'Gagal terhubung ke MQTT';
-      });
-
-      debugPrint('OTA MQTT error: $error');
+    if (confirmed == true) {
+      await ota.startUpdate();
     }
   }
 
-  @override
-  void dispose() {
-    _subscription?.cancel();
-    _mqtt.dispose();
-    super.dispose();
+  String _statusText(OtaService ota) {
+    final percent = (ota.progress * 100).round();
+
+    switch (ota.phase) {
+      case OtaPhase.idle:
+        final v = ota.currentVersion;
+        return v == null
+            ? 'Hubungkan ABOT lalu cek pembaruan'
+            : 'Versi ABOT saat ini: v$v';
+      case OtaPhase.checking:
+        return 'Memeriksa pembaruan...';
+      case OtaPhase.upToDate:
+        return 'Firmware sudah yang terbaru (v${ota.currentVersion ?? '?'})';
+      case OtaPhase.available:
+        return 'Tersedia versi v${ota.manifest?.version ?? '?'}';
+      case OtaPhase.starting:
+        return 'Mengirim perintah update...';
+      case OtaPhase.connectingWifi:
+        return 'ABOT menyambung ke WiFi...';
+      case OtaPhase.fetchingManifest:
+        return 'ABOT mengambil info update...';
+      case OtaPhase.downloading:
+        return 'Mengunduh firmware: $percent%';
+      case OtaPhase.verifying:
+        return 'Memverifikasi firmware...';
+      case OtaPhase.installing:
+        return 'Memasang firmware...';
+      case OtaPhase.rebooting:
+        return 'ABOT restart. Mohon tunggu...';
+      case OtaPhase.verifyingVersion:
+        return 'Memverifikasi versi baru...';
+      case OtaPhase.success:
+        final base = 'Update berhasil — sekarang v${ota.currentVersion ?? '?'}';
+        return ota.succeededInSimulation ? '$base (simulasi)' : base;
+      case OtaPhase.failed:
+        return ota.failure?.message ?? 'Update gagal';
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final ota = context.watch<OtaService>();
     final colorScheme = Theme.of(context).colorScheme;
+    final phase = ota.phase;
+
+    final IconData icon;
+    final Color iconColor;
+
+    switch (phase) {
+      case OtaPhase.success:
+        icon = Icons.check_circle_rounded;
+        iconColor = Colors.green;
+        break;
+      case OtaPhase.failed:
+        icon = Icons.error_outline_rounded;
+        iconColor = colorScheme.error;
+        break;
+      case OtaPhase.upToDate:
+        icon = Icons.verified_rounded;
+        iconColor = Colors.green;
+        break;
+      case OtaPhase.available:
+        icon = Icons.system_update_alt_rounded;
+        iconColor = colorScheme.primary;
+        break;
+      case OtaPhase.idle:
+        icon = Icons.info_outline_rounded;
+        iconColor = colorScheme.onSurfaceVariant;
+        break;
+      default:
+        icon = Icons.sync_rounded;
+        iconColor = colorScheme.primary;
+    }
+
+    final showProgress = ota.isRunning || ota.isChecking;
+    final determinate = phase == OtaPhase.downloading && ota.progress > 0;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -114,59 +162,89 @@ class _FirmwareOtaCardState extends State<FirmwareOtaCard> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'OTA melalui MQTT',
+                'Update firmware',
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
               ),
               const SizedBox(height: 8),
-              const Text(
-                'Uji alur update firmware di Wokwi. Mode simulasi '
-                'tidak mengunduh firmware, menulis flash, '
-                'atau me-restart ESP32.',
+              Text(
+                ota.isSimulated
+                    ? 'Mode simulasi: alur update diuji tanpa mengunduh '
+                        'firmware, menulis flash, atau me-restart ESP32.'
+                    : 'ABOT mengunduh firmware sendiri lewat WiFi. Pastikan '
+                        'ABOT sudah tersambung ke WiFi dan baterai cukup.',
               ),
               const SizedBox(height: 16),
               Row(
                 children: [
-                  Icon(
-                    _completed
-                        ? Icons.check_circle_rounded
-                        : _busy
-                        ? Icons.sync_rounded
-                        : Icons.info_outline_rounded,
-                    color: _completed
-                        ? Colors.green
-                        : _busy
-                        ? colorScheme.primary
-                        : colorScheme.onSurfaceVariant,
-                  ),
+                  Icon(icon, color: iconColor),
                   const SizedBox(width: 8),
-                  Expanded(child: Text(_status)),
+                  Expanded(child: Text(_statusText(ota))),
                 ],
               ),
-              if (_busy) ...[
+              if (showProgress) ...[
                 const SizedBox(height: 12),
                 LinearProgressIndicator(
-                  value: _progress > 0 ? _progress : null,
+                  value: determinate ? ota.progress : null,
                 ),
               ],
               const SizedBox(height: 16),
               SizedBox(
                 width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: _busy ? null : _startOta,
-                  icon: Icon(
-                    _busy
-                        ? Icons.sync_rounded
-                        : Icons.system_update_alt_rounded,
-                  ),
-                  label: Text(
-                    _busy ? 'OTA sedang berjalan...' : 'Mulai Simulasi OTA',
+                child: _buildAction(context, ota),
+              ),
+              if (ota.canCancel) ...[
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton(
+                    onPressed: ota.cancelUpdate,
+                    child: const Text('Batalkan'),
                   ),
                 ),
-              ),
+              ],
             ],
           ),
         ),
       ),
     );
+  }
+
+  Widget _buildAction(BuildContext context, OtaService ota) {
+    switch (ota.phase) {
+      case OtaPhase.available:
+        return FilledButton.icon(
+          onPressed: () => _confirmAndStart(context, ota),
+          icon: const Icon(Icons.system_update_alt_rounded),
+          label: Text('Update ke v${ota.manifest?.version ?? '?'}'),
+        );
+
+      case OtaPhase.checking:
+        return const FilledButton(
+          onPressed: null,
+          child: Text('Memeriksa...'),
+        );
+
+      case OtaPhase.failed:
+        return FilledButton.icon(
+          onPressed: () => _check(context, ota),
+          icon: const Icon(Icons.refresh_rounded),
+          label: const Text('Coba lagi'),
+        );
+
+      case OtaPhase.idle:
+      case OtaPhase.upToDate:
+      case OtaPhase.success:
+        return FilledButton.tonalIcon(
+          onPressed: () => _check(context, ota),
+          icon: const Icon(Icons.search_rounded),
+          label: const Text('Cek pembaruan'),
+        );
+
+      default:
+        return const FilledButton(
+          onPressed: null,
+          child: Text('Update berjalan — jangan matikan ABOT'),
+        );
+    }
   }
 }

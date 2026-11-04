@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../services/haptic_service.dart';
+import '../services/ota_service.dart';
 import '../services/settings_service.dart';
 import '../services/tts_service.dart';
 import '../widgets/firmware_ota_card.dart';
@@ -9,10 +10,22 @@ import '../widgets/firmware_ota_card.dart';
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
 
+  String _themeLabel(AppTheme theme) {
+    switch (theme) {
+      case AppTheme.light:
+        return 'Terang';
+      case AppTheme.dark:
+        return 'Gelap';
+      case AppTheme.system:
+        return 'Ikuti sistem';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final settings = context.watch<SettingsService>();
     final tts = context.watch<TtsService>();
+    final ota = context.watch<OtaService>();
 
     return Scaffold(
       appBar: AppBar(title: const Text('Pengaturan')),
@@ -22,7 +35,7 @@ class SettingsScreen extends StatelessWidget {
           // ============================================================
           // SUARA
           // ============================================================
-          _SectionHeader(icon: Icons.volume_up_rounded, title: 'Suara'),
+          const _SectionHeader(icon: Icons.volume_up_rounded, title: 'Suara'),
           SwitchListTile(
             secondary: const Icon(Icons.volume_up_rounded),
             title: const Text('Suara Navigasi'),
@@ -30,8 +43,10 @@ class SettingsScreen extends StatelessWidget {
             value: settings.ttsEnabled,
             onChanged: (v) async {
               await HapticService.select();
-              settings.setTtsEnabled(v);
-              tts.setEnabled(v);
+              // Tunggu simpan selesai, lalu sinkronkan TTS dengan nilai
+              // yang benar-benar tersimpan (jika gagal simpan, tidak beda).
+              await settings.setTtsEnabled(v);
+              tts.setEnabled(settings.ttsEnabled);
             },
           ),
           SwitchListTile(
@@ -42,8 +57,8 @@ class SettingsScreen extends StatelessWidget {
             onChanged: settings.ttsEnabled
                 ? (v) async {
                     await HapticService.select();
-                    settings.setSpeakNearNow(v);
-                    tts.setSpeakNearNow(v);
+                    await settings.setSpeakNearNow(v);
+                    tts.setSpeakNearNow(settings.speakNearNow);
                   }
                 : null,
           ),
@@ -51,7 +66,7 @@ class SettingsScreen extends StatelessWidget {
           // ============================================================
           // TAMPILAN
           // ============================================================
-          _SectionHeader(icon: Icons.palette_rounded, title: 'Tampilan'),
+          const _SectionHeader(icon: Icons.palette_rounded, title: 'Tampilan'),
           ListTile(
             leading: const Icon(Icons.straighten_rounded),
             title: const Text('Unit Jarak'),
@@ -75,13 +90,7 @@ class SettingsScreen extends StatelessWidget {
           ListTile(
             leading: const Icon(Icons.brightness_6_rounded),
             title: const Text('Tema'),
-            subtitle: Text(
-              settings.theme == AppTheme.light
-                  ? 'Terang'
-                  : settings.theme == AppTheme.dark
-                  ? 'Gelap'
-                  : 'Ikuti sistem',
-            ),
+            subtitle: Text(_themeLabel(settings.theme)),
             trailing: DropdownButton<AppTheme>(
               value: settings.theme,
               underline: const SizedBox.shrink(),
@@ -91,10 +100,9 @@ class SettingsScreen extends StatelessWidget {
                 DropdownMenuItem(value: AppTheme.system, child: Text('Sistem')),
               ],
               onChanged: (t) async {
-                if (t != null) {
-                  await HapticService.select();
-                  settings.setTheme(t);
-                }
+                if (t == null) return;
+                await HapticService.select();
+                settings.setTheme(t);
               },
             ),
           ),
@@ -112,7 +120,10 @@ class SettingsScreen extends StatelessWidget {
           // ============================================================
           // NAVIGASI
           // ============================================================
-          _SectionHeader(icon: Icons.navigation_rounded, title: 'Navigasi'),
+          const _SectionHeader(
+            icon: Icons.navigation_rounded,
+            title: 'Navigasi',
+          ),
           SwitchListTile(
             secondary: const Icon(Icons.alt_route_rounded),
             title: const Text('Reroute Otomatis'),
@@ -139,22 +150,26 @@ class SettingsScreen extends StatelessWidget {
           // ============================================================
           // FIRMWARE UPDATE (OTA)
           // ============================================================
-          _SectionHeader(
+          const _SectionHeader(
             icon: Icons.system_update_rounded,
             title: 'Firmware Update',
           ),
-          const ListTile(
-            leading: Icon(Icons.memory_rounded),
-            title: Text('Firmware ESP32'),
-            subtitle: Text('Versi saat ini: 3.45 (Wokwi)'),
-            trailing: Chip(label: Text('Simulasi')),
+          ListTile(
+            leading: const Icon(Icons.memory_rounded),
+            title: const Text('Firmware ESP32'),
+            subtitle: Text(
+              ota.currentVersion == null
+                  ? 'Versi: belum terhubung'
+                  : 'Versi saat ini: ${ota.currentVersion}',
+            ),
+            trailing: Chip(label: Text(ota.isSimulated ? 'Simulasi' : 'Live')),
           ),
           const FirmwareOtaCard(),
 
           // ============================================================
           // SIMULATOR
           // ============================================================
-          _SectionHeader(icon: Icons.science_rounded, title: 'Simulator'),
+          const _SectionHeader(icon: Icons.science_rounded, title: 'Simulator'),
           ListTile(
             leading: const Icon(Icons.speed_rounded),
             title: const Text('Kecepatan Default'),
@@ -181,10 +196,6 @@ class SettingsScreen extends StatelessWidget {
               }).toList(),
             ),
           ),
-
-          // ============================================================
-          // CACHE DAN PETA OFFLINE
-          // ============================================================
         ],
       ),
     );
@@ -212,7 +223,7 @@ class _SectionHeader extends StatelessWidget {
             width: 28,
             height: 28,
             decoration: BoxDecoration(
-              color: primary.withValues( alpha: 0.12),
+              color: primary.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(icon, size: 16, color: primary),
@@ -229,7 +240,7 @@ class _SectionHeader extends StatelessWidget {
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: Container(height: 1, color: primary.withValues( alpha: 0.15)),
+            child: Container(height: 1, color: primary.withValues(alpha: 0.15)),
           ),
         ],
       ),

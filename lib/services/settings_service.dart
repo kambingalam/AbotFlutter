@@ -71,110 +71,103 @@ class SettingsService extends ChangeNotifier {
   // ============================================================
   // SAVE HELPERS
   // ============================================================
-  Future<bool> _saveBool(String key, bool v) async {
+  Future<bool> _save(
+    String key,
+    Future<bool> Function(SharedPreferences prefs) write,
+  ) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      return await prefs.setBool(key, v);
+      return await write(prefs);
     } catch (e) {
       debugPrint('[SETTINGS] save $key error: $e');
       return false;
     }
   }
 
-  Future<bool> _saveDouble(String key, double v) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      return await prefs.setDouble(key, v);
-    } catch (e) {
-      debugPrint('[SETTINGS] save $key error: $e');
-      return false;
-    }
-  }
+  Future<bool> _saveBool(String key, bool v) =>
+      _save(key, (p) => p.setBool(key, v));
 
-  Future<bool> _saveString(String key, String v) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      return await prefs.setString(key, v);
-    } catch (e) {
-      debugPrint('[SETTINGS] save $key error: $e');
-      return false;
-    }
-  }
+  Future<bool> _saveDouble(String key, double v) =>
+      _save(key, (p) => p.setDouble(key, v));
+
+  Future<bool> _saveString(String key, String v) =>
+      _save(key, (p) => p.setString(key, v));
 
   // ============================================================
-  // SETTERS — await save DULU, baru notify
+  // SETTERS — simpan DULU, baru update state + notify.
+  // Return true jika nilai berhasil tersimpan (atau sudah sama).
   // ============================================================
-  Future<void> setTtsEnabled(bool v) async {
-    if (_ttsEnabled == v) return;
-    final ok = await _saveBool(_keyTtsEnabled, v);
-    if (!ok) return;
+  Future<bool> setTtsEnabled(bool v) async {
+    if (_ttsEnabled == v) return true;
+    if (!await _saveBool(_keyTtsEnabled, v)) return false;
     _ttsEnabled = v;
     notifyListeners();
+    return true;
   }
 
-  Future<void> setSpeakNearNow(bool v) async {
-    if (_speakNearNow == v) return;
-    final ok = await _saveBool(_keySpeakNearNow, v);
-    if (!ok) return;
+  Future<bool> setSpeakNearNow(bool v) async {
+    if (_speakNearNow == v) return true;
+    if (!await _saveBool(_keySpeakNearNow, v)) return false;
     _speakNearNow = v;
     notifyListeners();
+    return true;
   }
 
-  Future<void> setDistanceUnit(DistanceUnit u) async {
-    if (_distanceUnit == u) return;
-    final ok = await _saveString(_keyDistanceUnit, u.name);
-    if (!ok) return;
+  Future<bool> setDistanceUnit(DistanceUnit u) async {
+    if (_distanceUnit == u) return true;
+    if (!await _saveString(_keyDistanceUnit, u.name)) return false;
     _distanceUnit = u;
     notifyListeners();
+    return true;
   }
 
-  Future<void> setSimSpeed(double s) async {
+  Future<bool> setSimSpeed(double s) async {
     final clamped = s.clamp(1.0, 50.0).toDouble();
-    if (_simSpeed == clamped) return;
-    final ok = await _saveDouble(_keySimSpeed, clamped);
-    if (!ok) return;
+    if (_simSpeed == clamped) return true;
+    if (!await _saveDouble(_keySimSpeed, clamped)) return false;
     _simSpeed = clamped;
     notifyListeners();
+    return true;
   }
 
-  Future<void> setAutoReroute(bool v) async {
-    if (_autoReroute == v) return;
-    final ok = await _saveBool(_keyAutoReroute, v);
-    if (!ok) return;
+  Future<bool> setAutoReroute(bool v) async {
+    if (_autoReroute == v) return true;
+    if (!await _saveBool(_keyAutoReroute, v)) return false;
     _autoReroute = v;
     notifyListeners();
+    return true;
   }
 
-  Future<void> setTheme(AppTheme t) async {
-    if (_theme == t) return;
-    final ok = await _saveString(_keyTheme, t.name);
-    if (!ok) return;
+  Future<bool> setTheme(AppTheme t) async {
+    if (_theme == t) return true;
+    if (!await _saveString(_keyTheme, t.name)) return false;
     _theme = t;
     notifyListeners();
+    return true;
   }
 
-  Future<void> setKeepScreenOn(bool v) async {
-    if (_keepScreenOn == v) return;
-    final ok = await _saveBool(_keyKeepScreenOn, v);
-    if (!ok) return;
+  Future<bool> setKeepScreenOn(bool v) async {
+    if (_keepScreenOn == v) return true;
+    if (!await _saveBool(_keyKeepScreenOn, v)) return false;
     _keepScreenOn = v;
     notifyListeners();
+    return true;
   }
 
-  Future<void> setOnboardingDone(bool v) async {
-    if (_onboardingDone == v) return;
-    final ok = await _saveBool(_keyOnboardingDone, v);
-    if (!ok) return;
+  Future<bool> setOnboardingDone(bool v) async {
+    if (_onboardingDone == v) return true;
+    if (!await _saveBool(_keyOnboardingDone, v)) return false;
     _onboardingDone = v;
     notifyListeners();
+    return true;
   }
 
-  Future<void> setBackgroundMode(bool v) async {
-    if (_backgroundMode == v) return;
-    final ok = await _saveBool(_keyBackgroundMode, v);
-    if (!ok) return;
+  Future<bool> setBackgroundMode(bool v) async {
+    if (_backgroundMode == v) return true;
+    if (!await _saveBool(_keyBackgroundMode, v)) return false;
     _backgroundMode = v;
     notifyListeners();
+    return true;
   }
 
   // ============================================================
@@ -214,12 +207,20 @@ class SettingsService extends ChangeNotifier {
   String formatDistanceSpoken(double meters) {
     if (_distanceUnit == DistanceUnit.miles) {
       final miles = meters / 1609.344;
-      if (miles < 0.1) return '${(miles * 5280 / 50).round() * 50} kaki';
+      if (miles < 0.1) {
+        // Bulatkan ke 50 kaki terdekat, minimal 50 (jangan "0 kaki").
+        var feet = (miles * 5280 / 50).round() * 50;
+        if (feet < 50) feet = 50;
+        return '$feet kaki';
+      }
       if (miles < 10) return '${miles.toStringAsFixed(1)} mil';
       return '${miles.round()} mil';
     } else {
       if (meters < 1000) {
-        final rounded = (meters / 50).round() * 50;
+        // <100 m bulatkan ke 10, selebihnya ke 50. Minimal 10 (jangan "0 meter").
+        final step = meters < 100 ? 10 : 50;
+        var rounded = (meters / step).round() * step;
+        if (rounded < 10) rounded = 10;
         return '$rounded meter';
       }
       final km = meters / 1000;
