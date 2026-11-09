@@ -43,7 +43,7 @@ class AbotMqttService {
   static const int _maxConnectRetries = 5;
   static const Duration _initialBackoff = Duration(seconds: 2);
 
-  final Queue<Map<String, dynamic>> _outbox = Queue<>();
+  final Queue<Map<String, dynamic>> _outbox = Queue<Map<String, dynamic>>();
 
 
   MqttServerClient? _client;
