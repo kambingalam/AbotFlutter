@@ -60,11 +60,11 @@ class UpdateService {
   static List<int> _parseVersion(String v) {
     final clean = v.replaceFirst(RegExp(r'^v'), '');
     final parts = clean.split(RegExp(r'[.\+]'));
-    int _at(int i) {
+    int at(int i) {
       if (i >= parts.length) return 0;
       return int.tryParse(parts[i]) ?? 0;
     }
-    return [_at(0), _at(1), _at(2)];
+    return [at(0), at(1), at(2)];
   }
 
   static bool _isNewer(List<int> a, List<int> b) {

@@ -110,6 +110,8 @@ class _SplashScreenState extends State<SplashScreen>
       await _showUpdateDialog(update);
     }
 
+    if (!mounted) return;
+
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
         transitionDuration: const Duration(milliseconds: 600),
