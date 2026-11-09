@@ -894,6 +894,14 @@ class AbotMqttService {
       case 'reset':
       case 'ping':
       case 'get_status':
+      case 'ota_start':
+      case 'ota_cancel':
+      case 'ota_accepted':
+      case 'ota_progress':
+      case 'ota_done':
+      case 'ota_error':
+      case 'ota_result':
+      case 'ota_simulated':
         return true;
       default:
         return false;
