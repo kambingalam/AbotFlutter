@@ -27,6 +27,7 @@ import '../services/simulator_service.dart';
 import '../services/tts_service.dart';
 
 import '../services/trip_manager.dart';
+import '../services/tile_cache_service.dart';
 
 import '../theme/app_theme.dart';
 
@@ -1127,11 +1128,7 @@ class _DrivingScreenState extends State<DrivingScreen>
 
             children: [
               TileLayer(
-                urlTemplate:
-                    'https://tile-a.openstreetmap.fr/hot/{z}/{x}/{y}.png',
-
-                userAgentPackageName: 'com.example.abot_drivers',
-
+                tileProvider: TileCacheService.tileProvider,
                 maxZoom: 19,
               ),
 
