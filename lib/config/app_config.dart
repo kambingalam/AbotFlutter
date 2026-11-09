@@ -11,7 +11,7 @@ class AppConfig {
   // OSRM
   // ============================================================
   static const String osrmBaseUrl =
-      "http://router.project-osrm.org/route/v1/driving";
+      "https://router.project-osrm.org/route/v1/driving";
 
   // ============================================================
   // GPS
@@ -23,6 +23,12 @@ class AppConfig {
   // LINK PROTOCOL
   // ============================================================
   static const Duration linkTimeout = Duration(seconds: 30);
+
+  // ============================================================
+  // MQTT TLS
+  // ============================================================
+  static const bool mqttUseTls = false;
+  static const int mqttTlsPort = 8883;
 
   // ============================================================
   // DEFAULT LOCATION (Medan)

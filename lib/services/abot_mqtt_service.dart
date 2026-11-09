@@ -1,9 +1,13 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:convert';
 import 'dart:developer' as developer;
 
 import 'package:mqtt_client/mqtt_client.dart';
 import 'package:mqtt_client/mqtt_server_client.dart';
+
+import '../config/app_config.dart';
+
 
 enum AbotMqttState {
   disconnected,
@@ -17,7 +21,9 @@ enum AbotMqttState {
 
 class AbotMqttService {
   static const String host = 'broker.emqx.io';
-  static const int port = 1883;
+
+  static const int port =
+      AppConfig.mqttUseTls ? AppConfig.mqttTlsPort : 1883;
 
   static const String commandTopic =
       'abot/wokwi/477375325542330369/v337/command';
@@ -33,6 +39,12 @@ class AbotMqttService {
 
   /// Jeda minimum antar percobaan auth otomatis (dipicu heartbeat).
   static const Duration _autoReauthInterval = Duration(seconds: 10);
+
+  static const int _maxConnectRetries = 5;
+  static const Duration _initialBackoff = Duration(seconds: 2);
+
+  final Queue<Map<String, dynamic>> _outbox = Queue<>();
+
 
   MqttServerClient? _client;
 
@@ -146,7 +158,7 @@ class AbotMqttService {
     final ongoing = _connectFuture;
     if (ongoing != null) return ongoing;
 
-    final future = _connectInternal();
+    final future = _connectWithRetry();
     _connectFuture = future;
 
     return future.whenComplete(() {
@@ -224,6 +236,35 @@ class AbotMqttService {
     try {
       old.disconnect();
     } catch (_) {}
+  }
+
+  Future<void> _connectWithRetry() async {
+    Duration delay = _initialBackoff;
+    for (var attempt = 1; attempt <= _maxConnectRetries; attempt++) {
+      if (_disposed) {
+        throw StateError('MQTT service sudah ditutup');
+      }
+
+      try {
+        await _connectInternal();
+        _flushOutbox();
+        return;
+      } catch (error, stackTrace) {
+        developer.log(
+          'MQTT connect attempt $attempt/$_maxConnectRetries gagal: $error',
+          name: 'ABOT MQTT',
+          error: error,
+          stackTrace: stackTrace,
+        );
+
+        if (attempt == _maxConnectRetries || _disposed) {
+          rethrow;
+        }
+
+        await Future.delayed(delay);
+        delay = Duration(seconds: delay.inSeconds * 2);
+      }
+    }
   }
 
   Future<void> _connectInternal() async {
@@ -731,7 +772,13 @@ class AbotMqttService {
     final client = _client;
 
     if (!isConnected || client == null) {
-      throw StateError('MQTT belum terhubung');
+
+      _outbox.add(data);
+      developer.log(
+        'Pesan ditantrikan (offline): ${jsonEncode(data)}',
+        name: 'ABOT MQTT',
+      );
+      return;
     }
 
     final builder = MqttClientPayloadBuilder()
@@ -761,6 +808,23 @@ class AbotMqttService {
     if (safe.containsKey('token')) safe['token'] = '***';
 
     developer.log('Command sent: ${jsonEncode(safe)}', name: 'ABOT MQTT');
+  }
+
+  void _flushOutbox() {
+    while (_outbox.isNotEmpty) {
+      if (!isConnected) break;
+      final data = _outbox.removeFirst();
+      try {
+        _publishRaw(data);
+      } catch (e) {
+        _outbox.addFirst(data);
+        developer.log(
+          'Gagal flush outbox, dikembalikan ke antrian: $e',
+          name: 'ABOT MQTT',
+        );
+        break;
+      }
+    }
   }
 
   void ping() {
