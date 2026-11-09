@@ -1,3 +1,4 @@
+
 import 'dart:async';
 import 'dart:developer' as developer;
 
@@ -8,6 +9,7 @@ import 'screens/splash_screen.dart';
 
 import 'services/abot_mqtt_service.dart';
 import 'services/background_service.dart';
+import 'services/ble_diagnostic_service.dart';
 import 'services/gps_service.dart';
 import 'services/mock_ble_service.dart';
 import 'services/osrm_service.dart';
@@ -33,7 +35,9 @@ Future<void> main() async {
   // Inisialisasi cache peta sebelum layar peta digunakan.
   await TileCacheService.init();
 
-  runApp(AbotDriverApp(settings: settings));
+  runApp(
+    AbotDriverApp(settings: settings),
+  );
 }
 
 class AbotDriverApp extends StatelessWidget {
@@ -57,9 +61,19 @@ class AbotDriverApp extends StatelessWidget {
 
         // ============================================================
         // BLE MOCK
+        // Tetap digunakan oleh TripManager.
         // ============================================================
         ChangeNotifierProvider<MockBleService>(
           create: (_) => MockBleService(),
+        ),
+
+        // ============================================================
+        // BLE DIAGNOSTIC
+        // Jalur terpisah untuk tes BLE fisik ESP32-S3.
+        // Tidak menggantikan MockBleService.
+        // ============================================================
+        ChangeNotifierProvider<BleDiagnosticService>(
+          create: (_) => BleDiagnosticService(),
         ),
 
         // ============================================================
@@ -90,9 +104,9 @@ class AbotDriverApp extends StatelessWidget {
 
         // ============================================================
         // OTA FIRMWARE UPDATE
-        // ============================================================
         // OtaService menggunakan koneksi MQTT yang sama.
         // Provider ini harus berada di bawah AbotMqttService.
+        // ============================================================
         ChangeNotifierProvider<OtaService>(
           create: (context) {
             final mqtt = context.read<AbotMqttService>();
@@ -156,6 +170,7 @@ class AbotDriverApp extends StatelessWidget {
 
         // ============================================================
         // TRIP MANAGER
+        // Tetap menggunakan MockBleService.
         // ============================================================
         ChangeNotifierProvider<TripManager>(
           create: (context) {
@@ -178,11 +193,9 @@ class AbotDriverApp extends StatelessWidget {
           return MaterialApp(
             title: 'ABOT Driver',
             debugShowCheckedModeBanner: false,
-
             theme: buildAppTheme(),
             darkTheme: buildAppDarkTheme(),
             themeMode: _themeModeFrom(theme),
-
             home: const SplashScreen(),
           );
         },

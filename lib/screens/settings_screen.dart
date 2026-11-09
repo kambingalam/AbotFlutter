@@ -7,6 +7,8 @@ import '../services/settings_service.dart';
 import '../services/tts_service.dart';
 import '../widgets/firmware_ota_card.dart';
 
+import 'ble_diagnostic_screen.dart';
+
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
 
@@ -144,6 +146,34 @@ class SettingsScreen extends StatelessWidget {
             onChanged: (v) async {
               await HapticService.select();
               settings.setBackgroundMode(v);
+            },
+          ),
+
+          // ============================================================
+          // KONEKSI PERANGKAT (BLE DIAGNOSTIC)
+          // ============================================================
+          const _SectionHeader(
+            icon: Icons.bluetooth_rounded,
+            title: 'Koneksi Perangkat',
+          ),
+          ListTile(
+            leading: const Icon(Icons.bluetooth_searching_rounded),
+            title: const Text('BLE Diagnostic'),
+            subtitle: const Text(
+              'Scan, hubungkan, dan tes komunikasi ESP32-S3',
+            ),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () async {
+              await HapticService.select();
+
+              if (!context.mounted) return;
+
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const BleDiagnosticScreen(),
+                ),
+              );
             },
           ),
 
