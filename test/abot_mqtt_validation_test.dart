@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import '../lib/services/abot_mqtt_service.dart';
+import 'package:abot_drivers/services/abot_mqtt_service.dart';
 
 void main() {
   test('_validateMqttPayload menerima payload route yang valid', () {

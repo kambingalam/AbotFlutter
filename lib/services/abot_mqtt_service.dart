@@ -46,7 +46,7 @@ class AbotMqttService {
   static const Duration _initialBackoff = Duration(seconds: 2);
   static const int _maxOutboxSize = 100;
 
-  final Queue<Map<String, dynamic>> _outbox = Queue<>();
+  final Queue<Map<String, dynamic>> _outbox = Queue<Map<String, dynamic>>();
 
 
   MqttServerClient? _client;
@@ -868,9 +868,9 @@ class AbotMqttService {
     return null;
   }
 
-  void _log(String message, {String name = 'ABOT MQTT'}) {
+  void _log(String message, {String name = 'ABOT MQTT', Object? error, StackTrace? stackTrace}) {
     if (kReleaseMode) return;
-    developer.log(message, name: name);
+    developer.log(message, name: name, error: error, stackTrace: stackTrace);
   }
 
   /// Validasi skema payload MQTT sebelum dikirim.
