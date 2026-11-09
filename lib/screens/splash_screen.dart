@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../services/trip_manager.dart';
+import '../services/update_service.dart';
 import '../widgets/abot_face.dart';
 import 'home_screen.dart';
 
@@ -103,6 +104,12 @@ class _SplashScreenState extends State<SplashScreen>
 
     if (!mounted) return;
 
+    // Cek update otomatis (tidak memaksa, hanya tawarkan).
+    final update = await UpdateService.check();
+    if (mounted && update.updateAvailable && update.htmlUrl != null) {
+      await _showUpdateDialog(update);
+    }
+
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
         transitionDuration: const Duration(milliseconds: 600),
@@ -123,6 +130,46 @@ class _SplashScreenState extends State<SplashScreen>
       if (!mounted) return;
       setState(() => _gpsState = _GpsState.failed);
     }
+  }
+
+  Future<void> _showUpdateDialog(UpdateService update) async {
+    return showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Update tersedia'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Versi baru: ${update.latestTag}'),
+            const SizedBox(height: 8),
+            const Text(
+              'Unduh APK dari GitHub dan install manual. '
+              'App akan tetap berfungsi kalau kamu lewati.',
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Nanti'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.of(dialogContext).pop();
+              if (update.htmlUrl != null) {
+                // ignore: avoid_print
+                print('Buka: ${update.htmlUrl}');
+                // Buka browser ke halaman release GitHub.
+                // (paket url_launcher belum ditambahkan — user buka manual via browser)
+              }
+            },
+            child: const Text('Buka GitHub'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
