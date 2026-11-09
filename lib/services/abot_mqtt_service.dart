@@ -3,6 +3,8 @@ import 'dart:collection';
 import 'dart:convert';
 import 'dart:developer' as developer;
 
+import 'package:flutter/foundation.dart';
+
 import 'package:mqtt_client/mqtt_client.dart';
 import 'package:mqtt_client/mqtt_server_client.dart';
 
@@ -42,8 +44,9 @@ class AbotMqttService {
 
   static const int _maxConnectRetries = 5;
   static const Duration _initialBackoff = Duration(seconds: 2);
+  static const int _maxOutboxSize = 100;
 
-  final Queue<Map<String, dynamic>> _outbox = Queue<Map<String, dynamic>>();
+  final Queue<Map<String, dynamic>> _outbox = Queue<>();
 
 
   MqttServerClient? _client;
@@ -112,7 +115,7 @@ class AbotMqttService {
       _stateController.add(nextState);
     }
 
-    developer.log('State changed: $nextState', name: 'ABOT MQTT');
+    _log('State changed: $nextState', name: 'ABOT MQTT');
 
     _resolveAuthWaiters(nextState);
   }
@@ -250,7 +253,7 @@ class AbotMqttService {
         _flushOutbox();
         return;
       } catch (error, stackTrace) {
-        developer.log(
+        _log(
           'MQTT connect attempt $attempt/$_maxConnectRetries gagal: $error',
           name: 'ABOT MQTT',
           error: error,
@@ -286,7 +289,7 @@ class AbotMqttService {
       ..autoReconnect = true
       ..resubscribeOnAutoReconnect = false
       ..onConnected = () {
-        developer.log('MQTT connected', name: 'ABOT MQTT');
+        _log('MQTT connected', name: 'ABOT MQTT');
 
         _attachUpdates(client);
         _resetAuthentication();
@@ -295,13 +298,13 @@ class AbotMqttService {
         unawaited(_subscribeAndAuthenticate(client));
       }
       ..onAutoReconnect = () {
-        developer.log('MQTT reconnecting', name: 'ABOT MQTT');
+        _log('MQTT reconnecting', name: 'ABOT MQTT');
 
         _resetAuthentication();
         _setState(AbotMqttState.connecting);
       }
       ..onAutoReconnected = () {
-        developer.log('MQTT reconnected', name: 'ABOT MQTT');
+        _log('MQTT reconnected', name: 'ABOT MQTT');
 
         _attachUpdates(client);
         _resetAuthentication();
@@ -310,7 +313,7 @@ class AbotMqttService {
         unawaited(_subscribeAndAuthenticate(client));
       }
       ..onDisconnected = () {
-        developer.log('MQTT disconnected', name: 'ABOT MQTT');
+        _log('MQTT disconnected', name: 'ABOT MQTT');
 
         _resetAuthentication();
         _setState(AbotMqttState.disconnected);
@@ -320,7 +323,7 @@ class AbotMqttService {
         MqttConnectMessage().withClientIdentifier(clientId).startClean();
 
     try {
-      developer.log('Connecting to $host:$port', name: 'ABOT MQTT');
+      _log('Connecting to $host:$port', name: 'ABOT MQTT');
 
       await client.connect();
 
@@ -349,7 +352,7 @@ class AbotMqttService {
         unawaited(_subscribeAndAuthenticate(client));
       }
     } catch (error, stackTrace) {
-      developer.log(
+      _log(
         'MQTT connection failed',
         name: 'ABOT MQTT',
         error: error,
@@ -383,7 +386,7 @@ class AbotMqttService {
     final updates = client.updates;
 
     if (updates == null) {
-      developer.log('client.updates belum tersedia', name: 'ABOT MQTT');
+      _log('client.updates belum tersedia', name: 'ABOT MQTT');
       return;
     }
 
@@ -394,7 +397,7 @@ class AbotMqttService {
     _updatesSubscription = updates.listen(
       _handleMessages,
       onError: (Object error, StackTrace stackTrace) {
-        developer.log(
+        _log(
           'MQTT updates stream error',
           name: 'ABOT MQTT',
           error: error,
@@ -403,7 +406,7 @@ class AbotMqttService {
       },
     );
 
-    developer.log('Listener status topic terpasang', name: 'ABOT MQTT');
+    _log('Listener status topic terpasang', name: 'ABOT MQTT');
   }
 
   void _resetAuthentication() {
@@ -447,7 +450,7 @@ class AbotMqttService {
     final completer = Completer<void>();
 
     client.onSubscribed = (topic) {
-      developer.log('SUBACK received: $topic', name: 'ABOT MQTT');
+      _log('SUBACK received: $topic', name: 'ABOT MQTT');
 
       if (topic == statusTopic && !completer.isCompleted) {
         completer.complete();
@@ -455,7 +458,7 @@ class AbotMqttService {
     };
 
     client.onSubscribeFail = (topic) {
-      developer.log('Subscribe failed: $topic', name: 'ABOT MQTT');
+      _log('Subscribe failed: $topic', name: 'ABOT MQTT');
 
       if (!completer.isCompleted) {
         completer.completeError(StateError('Gagal subscribe ke topic status'));
@@ -463,7 +466,7 @@ class AbotMqttService {
     };
 
     try {
-      developer.log('Subscribing: $statusTopic', name: 'ABOT MQTT');
+      _log('Subscribing: $statusTopic', name: 'ABOT MQTT');
 
       client.subscribe(statusTopic, MqttQos.atLeastOnce);
 
@@ -486,7 +489,7 @@ class AbotMqttService {
     } catch (error, stackTrace) {
       _subscribed = false;
 
-      developer.log(
+      _log(
         'Subscribe/auth setup failed',
         name: 'ABOT MQTT',
         error: error,
@@ -511,12 +514,12 @@ class AbotMqttService {
     try {
       _publishRaw({'t': 'auth', 'token': authToken});
 
-      developer.log(
+      _log(
         'AUTH published to $commandTopic',
         name: 'ABOT MQTT',
       );
     } catch (error) {
-      developer.log('Gagal kirim AUTH: $error', name: 'ABOT MQTT');
+      _log('Gagal kirim AUTH: $error', name: 'ABOT MQTT');
 
       _cancelAuthTimer();
       _setState(AbotMqttState.authFailed);
@@ -527,7 +530,7 @@ class AbotMqttService {
 
     _authTimer = Timer(authTimeout, () {
       if (!_authenticated && !_disposed && identical(_client, client)) {
-        developer.log(
+        _log(
           'Timeout menunggu auth_ok dari ESP32',
           name: 'ABOT MQTT',
         );
@@ -560,7 +563,7 @@ class AbotMqttService {
         final data = decoded;
         final type = data['t']?.toString();
 
-        developer.log(
+        _log(
           'Received on status topic: $payload',
           name: 'ABOT MQTT',
         );
@@ -573,7 +576,7 @@ class AbotMqttService {
             _setState(AbotMqttState.ready);
             _startHeartbeatMonitor();
 
-            developer.log(
+            _log(
               'ESP32 authenticated successfully',
               name: 'ABOT MQTT',
             );
@@ -609,7 +612,7 @@ class AbotMqttService {
           _messages.add(data);
         }
       } catch (error, stackTrace) {
-        developer.log(
+        _log(
           'Invalid MQTT message',
           name: 'ABOT MQTT',
           error: error,
@@ -630,7 +633,7 @@ class AbotMqttService {
 
       _setState(AbotMqttState.deviceOffline);
     } else if (online == true) {
-      developer.log(
+      _log(
         'ESP32 online: ${data['ver'] ?? 'unknown version'}',
         name: 'ABOT MQTT',
       );
@@ -718,7 +721,7 @@ class AbotMqttService {
         if (last == null) return;
 
         if (DateTime.now().difference(last) > heartbeatTimeout) {
-          developer.log(
+          _log(
             'Heartbeat timeout: ESP32 offline',
             name: 'ABOT MQTT',
           );
@@ -769,12 +772,20 @@ class AbotMqttService {
       throw StateError('ESP32 belum terautentikasi');
     }
 
+    // Validasi skema sebelum simpan ke antrian offline.
+    if (!_validateMqttPayload(data)) {
+      throw StateError('Payload MQTT tidak valid: type=${data['t']}');
+    }
+
     final client = _client;
 
     if (!isConnected || client == null) {
-
+      if (_outbox.length >= _maxOutboxSize) {
+        _outbox.removeFirst();
+        _log('Antrian offline penuh, buang pesan terlama');
+      }
       _outbox.add(data);
-      developer.log(
+      _log(
         'Pesan ditantrikan (offline): ${jsonEncode(data)}',
         name: 'ABOT MQTT',
       );
@@ -807,7 +818,7 @@ class AbotMqttService {
     final safe = Map<String, dynamic>.of(data);
     if (safe.containsKey('token')) safe['token'] = '***';
 
-    developer.log('Command sent: ${jsonEncode(safe)}', name: 'ABOT MQTT');
+    _log('Command sent: ${jsonEncode(safe)}', name: 'ABOT MQTT');
   }
 
   void _flushOutbox() {
@@ -818,7 +829,7 @@ class AbotMqttService {
         _publishRaw(data);
       } catch (e) {
         _outbox.addFirst(data);
-        developer.log(
+        _log(
           'Gagal flush outbox, dikembalikan ke antrian: $e',
           name: 'ABOT MQTT',
         );
@@ -855,6 +866,38 @@ class AbotMqttService {
     if (text == 'false' || text == '0') return false;
 
     return null;
+  }
+
+  void _log(String message, {String name = 'ABOT MQTT'}) {
+    if (kReleaseMode) return;
+    developer.log(message, name: name);
+  }
+
+  /// Validasi skema payload MQTT sebelum dikirim.
+  /// Payload yang gagal validasi ditolak agar tidak menumpuk antrian offline
+  /// atau menyebabkan crash di sisi penerima.
+  bool _validateMqttPayload(Map<String, dynamic> data) {
+    final type = data['t'] as String?;
+    if (type == null || type.isEmpty) return false;
+
+    switch (type) {
+      case 'route':
+        return data['dist'] is num &&
+            data['dur'] is num &&
+            data['coords'] is List &&
+            (data['coords'] as List).isNotEmpty;
+      case 'gps':
+        return (data['progress'] is num) ||
+            (data['lat'] is num && data['lon'] is num);
+      case 'trip_start':
+      case 'trip_end':
+      case 'reset':
+      case 'ping':
+      case 'get_status':
+        return true;
+      default:
+        return false;
+    }
   }
 
   void _cancelAuthTimer() {

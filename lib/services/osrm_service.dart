@@ -21,6 +21,11 @@ class OsrmException implements Exception {
 enum OsrmErrorType { network, http, badResponse, parse, unknown }
 
 class OsrmService {
+  void _log(String message) {
+    if (kReleaseMode) return;
+    debugPrint(message);
+  }
+
   Future<Trip?> getRoute({
     required double fromLat,
     required double fromLon,
@@ -39,7 +44,7 @@ class OsrmService {
       );
       return routes.isEmpty ? null : routes.first;
     } on OsrmException catch (e) {
-      debugPrint('[OSRM] getRoute gagal: $e');
+      _log('[OSRM] getRoute gagal: $e');
       return null;
     }
   }
@@ -63,7 +68,7 @@ class OsrmService {
       '&alternatives=$alternatives',
     );
 
-    debugPrint('[OSRM] GET $url');
+    _log('[OSRM] GET $url');
 
     http.Response response;
     try {
@@ -231,7 +236,7 @@ class OsrmService {
         viaRoads: viaText,
       );
     } catch (e) {
-      debugPrint('[OSRM] _parseRoute[$index] gagal: $e');
+      _log('[OSRM] _parseRoute[$index] gagal: $e');
       return null;
     }
   }
