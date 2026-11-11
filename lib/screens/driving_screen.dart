@@ -1128,6 +1128,9 @@ class _DrivingScreenState extends State<DrivingScreen>
 
             children: [
               TileLayer(
+                urlTemplate:
+                    'https://tile-a.openstreetmap.fr/hot/{z}/{x}/{y}.png',
+                userAgentPackageName: 'com.example.abot_drivers',
                 tileProvider: TileCacheService.tileProvider,
                 maxZoom: 19,
               ),
