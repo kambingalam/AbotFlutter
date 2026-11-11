@@ -1,5 +1,6 @@
 
 import 'dart:async';
+import 'dart:convert' as convert;
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
@@ -70,6 +71,18 @@ class TripManager extends ChangeNotifier {
 
   DateTime? _lastRerouteAt;
   DateTime? _lastMqttGpsAt;
+
+  // Rute: tunggu ack, kirim ulang kalau ESP32 restart (rute hilang).
+  static const Duration _routeAckTimeout = Duration(seconds: 3);
+  static const int _routeMaxAttempts = 2;
+  static const Duration _routeResyncCooldown = Duration(seconds: 10);
+  // Firmware membuang pesan di atas LINK_LINE_MAX (8 KB) tanpa error.
+  static const int maxRoutePayloadBytes = 8000;
+  static const int maxRoutePoints = 120;
+
+  Completer<bool>? _routeAck;
+  DateTime? _lastRouteSentAt;
+  bool _resendingRoute = false;
 
   /// True jika posisi berasal dari simulator.
   bool _simulating = false;
@@ -183,8 +196,8 @@ class TripManager extends ChangeNotifier {
     if (isAbotConnected) {
       debugPrint('[TRIP] Mengirim perjalanan ke ABOT...');
       await _sendTripStart();
-      await _sendRoute(trip);
-      debugPrint('[TRIP] Pengiriman perintah selesai');
+      unawaited(_sendRouteReliable(trip));
+      debugPrint('[TRIP] Rute dikirim, ack ditunggu di latar belakang');
     } else {
       debugPrint(
         '[TRIP] BLE dan MQTT belum terhubung. '
@@ -227,7 +240,7 @@ class TripManager extends ChangeNotifier {
 
     if (isAbotConnected) {
       await _sendTripStart();
-      await _sendRoute(trip);
+      unawaited(_sendRouteReliable(trip));
     } else {
       debugPrint(
         '[TRIP] BLE dan MQTT belum terhubung. '
@@ -304,7 +317,7 @@ class TripManager extends ChangeNotifier {
       currentTrip = newTrip;
 
       if (isAbotConnected) {
-        await _sendRoute(newTrip);
+        unawaited(_sendRouteReliable(newTrip));
       }
 
       debugPrint(
@@ -391,10 +404,12 @@ class TripManager extends ChangeNotifier {
 
       case 'ack':
         debugPrint('[ABOT MQTT] ACK: $message');
+        _completeRouteAck(true, message);
         break;
 
       case 'nack':
         debugPrint('[ABOT MQTT] NACK: $message');
+        _completeRouteAck(false, message);
         break;
 
       case 'offroute':
@@ -404,10 +419,57 @@ class TripManager extends ChangeNotifier {
       case 'status':
       case 'hb':
         debugPrint('[ABOT MQTT] Status ESP32: $message');
+        _resyncRouteIfNeeded(message);
         break;
 
       default:
         debugPrint('[ABOT MQTT] Tipe pesan belum ditangani: $type');
+    }
+  }
+
+  /// ack/nack boleh menyebut sasarannya (`for`), abaikan ack untuk pesan lain.
+  void _completeRouteAck(bool ok, Map<String, dynamic> message) {
+    final ack = _routeAck;
+    if (ack == null || ack.isCompleted) return;
+
+    final target = message['for']?.toString();
+    if (target != null && target != 'route') return;
+
+    ack.complete(ok);
+  }
+
+  /// ESP32 restart bisa menghapus rute tanpa kabar. Heartbeat membawa
+  /// `route`/`trip`, jadi kirim ulang saat trip aktif tapi rute hilang.
+  void _resyncRouteIfNeeded(Map<String, dynamic> message) {
+    if (state != TripState.active) return;
+    if (currentTrip == null) return;
+    if (!isMqttConnected) return;
+    if (_toBool(message['trip']) != true) return;
+    if (_toBool(message['route']) != false) return;
+
+    final last = _lastRouteSentAt;
+    if (last != null &&
+        DateTime.now().difference(last) < _routeResyncCooldown) {
+      return;
+    }
+
+    debugPrint('[TRIP] ESP32 kehilangan rute, kirim ulang');
+    unawaited(_sendRouteReliable(currentTrip!));
+  }
+
+  static bool? _toBool(Object? value) {
+    if (value is bool) return value;
+    if (value is num) return value != 0;
+
+    switch (value?.toString().toLowerCase()) {
+      case 'true':
+      case '1':
+        return true;
+      case 'false':
+      case '0':
+        return false;
+      default:
+        return null;
     }
   }
 
@@ -528,22 +590,85 @@ class TripManager extends ChangeNotifier {
     await Future.delayed(const Duration(milliseconds: 200));
   }
 
-  Future<void> _sendRoute(Trip trip) async {
-    final steps = trip.steps.map((step) => step.toJson()).toList();
+  /// Kirim rute lalu tunggu ack; ulangi sekali kalau diam.
+  /// Sisa kegagalan ditutup oleh resync heartbeat.
+  Future<void> _sendRouteReliable(Trip trip) async {
+    if (_resendingRoute) return;
+    _resendingRoute = true;
 
-    final message = AbotMessage.route(
-      distance: trip.totalDistance,
-      duration: trip.totalDuration,
-      coords: trip.coords,
-      steps: steps,
-    );
+    try {
+      final message = _buildRouteMessage(trip);
 
-    if (isBleConnected) {
-      await _sendBleMessage(message);
+      for (var attempt = 1; attempt <= _routeMaxAttempts; attempt++) {
+        if (!isAbotConnected) return;
+
+        final ack = _routeAck = Completer<bool>();
+        _lastRouteSentAt = DateTime.now();
+
+        if (isBleConnected) await _sendBleMessage(message);
+        if (isMqttConnected) await _sendMqttMessage(message);
+
+        final ok = await ack.future.timeout(
+          _routeAckTimeout,
+          onTimeout: () => false,
+        );
+
+        if (identical(_routeAck, ack)) _routeAck = null;
+
+        if (ok) {
+          debugPrint('[TRIP] Rute di-ack (percobaan $attempt)');
+          return;
+        }
+
+        debugPrint('[TRIP] Rute tanpa ack (percobaan $attempt/$_routeMaxAttempts)');
+      }
+    } finally {
+      _resendingRoute = false;
     }
+  }
 
-    if (isMqttConnected) {
-      await _sendMqttMessage(message);
+  /// Bungkus rute jadi pesan sekecil mungkin: langkah non-penting dibuang,
+  /// titik dipangkas, angka dibulatkan, lalu titik diturunkan lagi kalau
+  /// payload masih di atas 8 KB.
+  AbotMessage _buildRouteMessage(Trip trip) {
+    var points = maxRoutePoints;
+    var importantOnly = false;
+
+    while (true) {
+      final device = trip.forDevice(maxPoints: points);
+      final trimmed =
+          device.steps.where((step) => step.important).toList();
+      final steps = importantOnly && trimmed.isNotEmpty
+          ? trimmed
+          : device.steps;
+
+      final message = AbotMessage.route(
+        distance: trip.totalDistance.roundToDouble(),
+        duration: trip.totalDuration.roundToDouble(),
+        coords: device.coords,
+        steps: steps.map((step) => step.toJson()).toList(),
+      );
+
+      final size = convert.utf8.encode(message.toJsonString()).length;
+
+      if (size <= maxRoutePayloadBytes) return message;
+
+      if (!importantOnly) {
+        importantOnly = true;
+        debugPrint('[TRIP] Payload rute $size byte, buang langkah non-penting');
+        continue;
+      }
+
+      if (points <= 30) {
+        debugPrint(
+          '[TRIP] Payload rute $size byte, masih >$maxRoutePayloadBytes '
+          'walau titik sudah $points',
+        );
+        return message;
+      }
+
+      points = points ~/ 2;
+      debugPrint('[TRIP] Payload rute $size byte, coba $points titik');
     }
   }
 
@@ -571,6 +696,9 @@ class TripManager extends ChangeNotifier {
     _mqttSub.cancel();
     _gpsSub.cancel();
     _connSub.cancel();
+
+    final ack = _routeAck;
+    if (ack != null && !ack.isCompleted) ack.complete(false);
 
     super.dispose();
   }

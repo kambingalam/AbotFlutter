@@ -55,10 +55,22 @@ class NavStep {
 
   Map<String, dynamic> toJson() => {
         'instr': instruction,
-        'road': road,
-        'dist': distance,
+        'road': _ascii20(road),
+        'dist': _round1(distance),
         'idx': routeIndex,
-        'routeDist': routeDistance,
+        'routeDist': _round1(routeDistance),
         'imp': important,
       };
+
+  /// Font OLED firmware hanya ASCII dan kolomnya sempit.
+  static String _ascii20(String s) {
+    final out = StringBuffer();
+    for (final rune in s.runes) {
+      if (out.length >= 20) break;
+      out.writeCharCode(rune < 128 ? rune : 63); // '?'
+    }
+    return out.toString();
+  }
+
+  static double _round1(double v) => (v * 10).roundToDouble() / 10;
 }
