@@ -42,18 +42,19 @@ class OtaFailure {
 class OtaConfig {
   const OtaConfig({
     this.manifestUrl,
-    this.useSimulatedManifest = true,
+    // FIX: default sekarang FALSE (OTA beneran). Set true hanya saat dev/Wokwi.
+    this.useSimulatedManifest = false,
     this.deviceModel = 'abot-esp32s3',
     this.acceptTimeout = const Duration(seconds: 10),
-    this.stageTimeout = const Duration(seconds: 45),
+    this.stageTimeout = const Duration(seconds: 90),
     this.rebootTimeout = const Duration(seconds: 120),
     this.versionTimeout = const Duration(seconds: 20),
   });
 
-  /// URL manifest (HTTPS). Kosong = pakai manifest simulasi.
+  /// URL manifest (HTTPS). WAJIB diisi jika useSimulatedManifest == false.
   final Uri? manifestUrl;
 
-  /// true: tidak mengunduh manifest, buat manifest tiruan (untuk Wokwi).
+  /// true: tidak mengunduh manifest, buat manifest tiruan (untuk Wokwi/dev).
   final bool useSimulatedManifest;
 
   final String deviceModel;
@@ -63,8 +64,6 @@ class OtaConfig {
   final Duration versionTimeout;
 }
 
-/// State machine OTA. Satu instance untuk seluruh aplikasi (via Provider),
-/// supaya progres tidak hilang saat pengguna keluar dari layar Pengaturan.
 class OtaService extends ChangeNotifier {
   OtaService({required OtaLink link, this.config = const OtaConfig()})
       : _link = link {
@@ -119,8 +118,6 @@ class OtaService extends ChangeNotifier {
   // GETTERS
   // ============================================================
   OtaPhase get phase => _phase;
-
-  /// 0.0 - 1.0 (progres tahap unduhan).
   double get progress => _progress;
   OtaFailure? get failure => _failure;
   OtaManifest? get manifest => _manifest;
@@ -132,9 +129,9 @@ class OtaService extends ChangeNotifier {
   bool get isRunning => _runningPhases.contains(_phase);
   bool get isChecking => _phase == OtaPhase.checking;
   bool get canCancel => _cancellablePhases.contains(_phase);
-  bool get isSimulated => config.useSimulatedManifest || config.manifestUrl == null;
+  bool get isSimulated =>
+      config.useSimulatedManifest || config.manifestUrl == null;
 
-  /// True jika sukses lewat jalur simulasi lama (firmware V3.45).
   bool get succeededInSimulation => _simulatedResult;
 
   // ============================================================
@@ -148,6 +145,15 @@ class OtaService extends ChangeNotifier {
     _progress = 0;
     _simulatedResult = false;
     _setPhase(OtaPhase.checking);
+
+    // FIX: tolak awal kalau bukan simulasi tapi manifestUrl kosong.
+    if (!config.useSimulatedManifest && config.manifestUrl == null) {
+      _fail(
+        OtaErrorCode.manifestFailed,
+        'URL manifest OTA belum diatur di aplikasi',
+      );
+      return;
+    }
 
     final String current;
 
@@ -214,7 +220,6 @@ class OtaService extends ChangeNotifier {
       return;
     }
 
-    // Pengecekan awal di aplikasi (firmware tetap mengecek ulang).
     if (_tripActive == true || _routeActive == true) {
       _fail(OtaErrorCode.tripActive);
       return;
@@ -227,6 +232,18 @@ class OtaService extends ChangeNotifier {
         'baterai $battery%, minimal ${manifest.minBattery}%',
       );
       return;
+    }
+
+    // FIX: tolak lebih awal kalau OTA beneran tapi URL firmware kosong/invalid.
+    if (!config.useSimulatedManifest) {
+      final fwUri = Uri.tryParse(manifest.url);
+      if (fwUri == null || fwUri.scheme != 'https') {
+        _fail(
+          OtaErrorCode.manifestInvalid,
+          'URL firmware di manifest bukan HTTPS',
+        );
+        return;
+      }
     }
 
     _failure = null;
@@ -242,10 +259,15 @@ class OtaService extends ChangeNotifier {
 
       if (_disposed || _phase != OtaPhase.starting) return;
 
+      // FIX: sekarang menyertakan url, size, sha256 agar firmware bisa
+      // melakukan unduhan nyata + verifikasi.
       _link.send({
         't': OtaMsg.start,
         'id': _requestId,
         'ver': manifest.version,
+        'url': manifest.url,
+        'size': manifest.size,
+        'sha256': manifest.sha256,
       });
 
       _arm(config.acceptTimeout, () {
@@ -256,7 +278,6 @@ class OtaService extends ChangeNotifier {
     }
   }
 
-  /// Batalkan update (hanya sebelum tahap verifikasi).
   void cancelUpdate() {
     if (!canCancel) return;
 
@@ -265,9 +286,7 @@ class OtaService extends ChangeNotifier {
         't': OtaMsg.cancel,
         if (_requestId != null) 'id': _requestId,
       });
-    } catch (_) {
-      // Tidak terkirim; timer di bawah tetap menutup proses.
-    }
+    } catch (_) {}
 
     _arm(const Duration(seconds: 8), () {
       _fail(
@@ -277,7 +296,6 @@ class OtaService extends ChangeNotifier {
     });
   }
 
-  /// Kembali ke keadaan awal (setelah sukses/gagal).
   void reset() {
     if (isRunning) return;
 
@@ -361,7 +379,7 @@ class OtaService extends ChangeNotifier {
       OtaStage.manifest => OtaPhase.fetchingManifest,
       OtaStage.verify => OtaPhase.verifying,
       OtaStage.install => OtaPhase.installing,
-      _ => OtaPhase.downloading, // termasuk firmware lama tanpa "stage"
+      _ => OtaPhase.downloading,
     };
 
     _progress = percent / 100;
@@ -378,7 +396,10 @@ class OtaService extends ChangeNotifier {
     _setPhase(OtaPhase.rebooting);
 
     _arm(config.rebootTimeout, () {
-      _fail(OtaErrorCode.appTimeout, 'ABOT tidak kembali online setelah update');
+      _fail(
+        OtaErrorCode.appTimeout,
+        'ABOT tidak kembali online setelah update',
+      );
     });
   }
 
@@ -398,7 +419,8 @@ class OtaService extends ChangeNotifier {
 
     final target = _targetVersion;
 
-    if (ok == true && (target == null || ver == null || _sameVersion(ver, target))) {
+    if (ok == true &&
+        (target == null || ver == null || _sameVersion(ver, target))) {
       _succeed();
     } else {
       _fail(
@@ -448,17 +470,15 @@ class OtaService extends ChangeNotifier {
 
     if (ver != null &&
         ver.isNotEmpty &&
-        (_phase == OtaPhase.rebooting || _phase == OtaPhase.verifyingVersion)) {
+        (_phase == OtaPhase.rebooting ||
+            _phase == OtaPhase.verifyingVersion)) {
       _evaluateVersion(ver);
-      return; // _succeed/_fail sudah memanggil notify bila perlu
+      return;
     }
 
     if (changed) _notify();
   }
 
-  // ============================================================
-  // KONEKSI
-  // ============================================================
   void _onReadyChanged(bool ready) {
     if (_phase != OtaPhase.rebooting) return;
 
@@ -473,7 +493,6 @@ class OtaService extends ChangeNotifier {
     }
   }
 
-  /// Dipanggil saat ABOT melaporkan versi setelah ota_done.
   void _evaluateVersion(String reported) {
     final target = _targetVersion;
     if (target == null) return;
@@ -483,7 +502,6 @@ class OtaService extends ChangeNotifier {
       return;
     }
 
-    // ABOT sudah kembali online tapi versinya masih yang lama.
     if (_phase == OtaPhase.verifyingVersion) {
       _fail(
         OtaErrorCode.bootFailed,

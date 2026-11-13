@@ -1,4 +1,3 @@
-
 import 'dart:async';
 import 'dart:developer' as developer;
 
@@ -61,7 +60,6 @@ class AbotDriverApp extends StatelessWidget {
 
         // ============================================================
         // BLE MOCK
-        // Tetap digunakan oleh TripManager.
         // ============================================================
         ChangeNotifierProvider<MockBleService>(
           create: (_) => MockBleService(),
@@ -69,8 +67,6 @@ class AbotDriverApp extends StatelessWidget {
 
         // ============================================================
         // BLE DIAGNOSTIC
-        // Jalur terpisah untuk tes BLE fisik ESP32-S3.
-        // Tidak menggantikan MockBleService.
         // ============================================================
         ChangeNotifierProvider<BleDiagnosticService>(
           create: (_) => BleDiagnosticService(),
@@ -83,7 +79,6 @@ class AbotDriverApp extends StatelessWidget {
           create: (_) {
             final mqtt = AbotMqttService();
 
-            // Koneksi MQTT berjalan secara asynchronous.
             unawaited(
               mqtt.connect().catchError(
                 (Object error, StackTrace stackTrace) {
@@ -104,8 +99,14 @@ class AbotDriverApp extends StatelessWidget {
 
         // ============================================================
         // OTA FIRMWARE UPDATE
-        // OtaService menggunakan koneksi MQTT yang sama.
-        // Provider ini harus berada di bawah AbotMqttService.
+        // FIX: sekarang pakai OTA beneran (useSimulatedManifest: false).
+        //
+        // ⚠️ PENTING: ganti URL di bawah dengan URL manifest.json yang
+        // sudah kamu host. Lihat langkah hosting di panduan terpisah.
+        //
+        // Contoh URL yang valid setelah hosting:
+        //   https://github.com/USERNAME/REPO/releases/download/v3.52.0/manifest.json
+        //   https://cdn.contoh.com/abot/manifest.json
         // ============================================================
         ChangeNotifierProvider<OtaService>(
           create: (context) {
@@ -113,9 +114,13 @@ class AbotDriverApp extends StatelessWidget {
 
             return OtaService(
               link: MqttOtaLink(mqtt),
-              config: const OtaConfig(
-                useSimulatedManifest: true,
+              config: OtaConfig(
+                useSimulatedManifest: false,
                 deviceModel: 'abot-esp32s3',
+                // ⚠️ GANTI URL INI setelah manifest dihosting:
+                manifestUrl: Uri.parse(
+                  'https://raw.githubusercontent.com/kambingalam/AbotDevices/refs/heads/main/manifest.json',
+                ),
               ),
             );
           },
@@ -170,7 +175,6 @@ class AbotDriverApp extends StatelessWidget {
 
         // ============================================================
         // TRIP MANAGER
-        // Tetap menggunakan MockBleService.
         // ============================================================
         ChangeNotifierProvider<TripManager>(
           create: (context) {
@@ -184,9 +188,6 @@ class AbotDriverApp extends StatelessWidget {
         ),
       ],
 
-      // ==============================================================
-      // APPLICATION
-      // ==============================================================
       child: Selector<SettingsService, AppTheme>(
         selector: (_, service) => service.theme,
         builder: (context, theme, _) {
@@ -203,9 +204,6 @@ class AbotDriverApp extends StatelessWidget {
     );
   }
 
-  // ================================================================
-  // THEME MODE
-  // ================================================================
   ThemeMode _themeModeFrom(AppTheme theme) {
     switch (theme) {
       case AppTheme.dark:
