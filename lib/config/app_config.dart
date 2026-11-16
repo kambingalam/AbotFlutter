@@ -27,7 +27,7 @@ class AppConfig {
   // ============================================================
   // MQTT TLS
   // ============================================================
-  static const bool mqttUseTls = false;
+  static const bool mqttUseTls = true;
   static const int mqttTlsPort = 8883;
 
   // ============================================================

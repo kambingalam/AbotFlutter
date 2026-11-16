@@ -280,6 +280,10 @@ class AbotMqttService {
 
     final client = MqttServerClient.withPort(host, clientId, port);
 
+    if (AppConfig.mqttUseTls) {
+      client.secure = true;
+    }
+
     _client = client;
 
     client
