@@ -79,6 +79,8 @@ class SettingsScreen extends StatelessWidget {
 
     if (value == null) return;
 
+    if (!context.mounted) return;
+
     final saved = await settings.setMqttToken(value);
 
     if (!context.mounted) return;
@@ -143,6 +145,8 @@ class SettingsScreen extends StatelessWidget {
     controller.dispose();
 
     if (value == null) return;
+
+    if (!context.mounted) return;
 
     final saved = await settings.setMqttTopic(value);
 
