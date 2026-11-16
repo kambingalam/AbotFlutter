@@ -28,8 +28,8 @@ class SettingsScreen extends StatelessWidget {
     BuildContext context,
     SettingsService settings,
   ) async {
-    final controller = TextEditingController(text: settings.mqttToken);
     final formKey = GlobalKey<FormState>();
+    var draft = settings.mqttToken;
 
     final value = await showDialog<String>(
       context: context,
@@ -38,11 +38,12 @@ class SettingsScreen extends StatelessWidget {
         content: Form(
           key: formKey,
           child: TextFormField(
-            controller: controller,
+            initialValue: draft,
             autofocus: true,
             obscureText: true,
             autocorrect: false,
             enableSuggestions: false,
+            onChanged: (v) => draft = v,
             decoration: const InputDecoration(
               labelText: 'Token',
               helperText: 'Minimal 16 karakter, tanpa spasi. Samakan dengan SET auth=...',
@@ -66,7 +67,7 @@ class SettingsScreen extends StatelessWidget {
           FilledButton(
             onPressed: () {
               if (formKey.currentState?.validate() ?? false) {
-                Navigator.pop(dialogContext, controller.text.trim());
+                Navigator.pop(dialogContext, draft.trim());
               }
             },
             child: const Text('Simpan'),
@@ -74,8 +75,6 @@ class SettingsScreen extends StatelessWidget {
         ],
       ),
     );
-
-    controller.dispose();
 
     if (value == null) return;
 
@@ -92,8 +91,8 @@ class SettingsScreen extends StatelessWidget {
     BuildContext context,
     SettingsService settings,
   ) async {
-    final controller = TextEditingController(text: settings.mqttTopic);
     final formKey = GlobalKey<FormState>();
+    var draft = settings.mqttTopic;
 
     final value = await showDialog<String>(
       context: context,
@@ -102,10 +101,11 @@ class SettingsScreen extends StatelessWidget {
         content: Form(
           key: formKey,
           child: TextFormField(
-            controller: controller,
+            initialValue: draft,
             autofocus: true,
             autocorrect: false,
             enableSuggestions: false,
+            onChanged: (v) => draft = v,
             decoration: const InputDecoration(
               labelText: 'Basis topik',
               helperText: '8-80 karakter: huruf, angka, _ - /',
@@ -133,7 +133,7 @@ class SettingsScreen extends StatelessWidget {
           FilledButton(
             onPressed: () {
               if (formKey.currentState?.validate() ?? false) {
-                Navigator.pop(dialogContext, controller.text.trim());
+                Navigator.pop(dialogContext, draft.trim());
               }
             },
             child: const Text('Simpan'),
@@ -141,8 +141,6 @@ class SettingsScreen extends StatelessWidget {
         ],
       ),
     );
-
-    controller.dispose();
 
     if (value == null) return;
 
