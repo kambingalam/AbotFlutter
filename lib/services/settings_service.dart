@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../config/app_config.dart';
+
 enum DistanceUnit { km, miles }
 
 enum AppTheme { light, dark, system }
@@ -15,6 +17,8 @@ class SettingsService extends ChangeNotifier {
   static const String _keyKeepScreenOn = 'settings.keepScreenOn';
   static const String _keyOnboardingDone = 'settings.onboarding.done';
   static const String _keyBackgroundMode = 'settings.backgroundMode';
+  static const String _keyMqttToken = 'settings.mqtt.token';
+  static const String _keyMqttTopic = 'settings.mqtt.topic';
 
   bool _ttsEnabled = true;
   bool _speakNearNow = true;
@@ -25,6 +29,8 @@ class SettingsService extends ChangeNotifier {
   bool _keepScreenOn = true;
   bool _onboardingDone = false;
   bool _backgroundMode = true;
+  String _mqttToken = '';
+  String _mqttTopic = AppConfig.defaultMqttTopic;
   bool _loaded = false;
   String? _lastLoadError;
 
@@ -37,6 +43,9 @@ class SettingsService extends ChangeNotifier {
   bool get keepScreenOn => _keepScreenOn;
   bool get onboardingDone => _onboardingDone;
   bool get backgroundMode => _backgroundMode;
+  String get mqttToken => _mqttToken;
+  String get mqttTopic => _mqttTopic;
+  bool get hasMqttToken => _mqttToken.isNotEmpty;
   bool get isLoaded => _loaded;
   String? get lastLoadError => _lastLoadError;
 
@@ -56,6 +65,8 @@ class SettingsService extends ChangeNotifier {
       _keepScreenOn = prefs.getBool(_keyKeepScreenOn) ?? true;
       _onboardingDone = prefs.getBool(_keyOnboardingDone) ?? false;
       _backgroundMode = prefs.getBool(_keyBackgroundMode) ?? true;
+      _mqttToken = prefs.getString(_keyMqttToken) ?? '';
+      _mqttTopic = prefs.getString(_keyMqttTopic) ?? AppConfig.defaultMqttTopic;
 
       _lastLoadError = null;
       debugPrint('[SETTINGS] Loaded');
@@ -166,6 +177,26 @@ class SettingsService extends ChangeNotifier {
     if (_backgroundMode == v) return true;
     if (!await _saveBool(_keyBackgroundMode, v)) return false;
     _backgroundMode = v;
+    notifyListeners();
+    return true;
+  }
+
+  Future<bool> setMqttToken(String token) async {
+    final value = token.trim();
+    if (value.isEmpty) return false;
+    if (_mqttToken == value) return true;
+    if (!await _saveString(_keyMqttToken, value)) return false;
+    _mqttToken = value;
+    notifyListeners();
+    return true;
+  }
+
+  Future<bool> setMqttTopic(String topic) async {
+    final value = topic.trim();
+    if (value.isEmpty) return false;
+    if (_mqttTopic == value) return true;
+    if (!await _saveString(_keyMqttTopic, value)) return false;
+    _mqttTopic = value;
     notifyListeners();
     return true;
   }

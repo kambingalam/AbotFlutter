@@ -34,18 +34,13 @@ Future<void> main() async {
   // Inisialisasi cache peta sebelum layar peta digunakan.
   await TileCacheService.init();
 
-  runApp(
-    AbotDriverApp(settings: settings),
-  );
+  runApp(AbotDriverApp(settings: settings));
 }
 
 class AbotDriverApp extends StatelessWidget {
   final SettingsService settings;
 
-  const AbotDriverApp({
-    super.key,
-    required this.settings,
-  });
+  const AbotDriverApp({super.key, required this.settings});
 
   @override
   Widget build(BuildContext context) {
@@ -54,16 +49,12 @@ class AbotDriverApp extends StatelessWidget {
         // ============================================================
         // SETTINGS
         // ============================================================
-        ChangeNotifierProvider<SettingsService>.value(
-          value: settings,
-        ),
+        ChangeNotifierProvider<SettingsService>.value(value: settings),
 
         // ============================================================
         // BLE MOCK
         // ============================================================
-        ChangeNotifierProvider<MockBleService>(
-          create: (_) => MockBleService(),
-        ),
+        ChangeNotifierProvider<MockBleService>(create: (_) => MockBleService()),
 
         // ============================================================
         // BLE DIAGNOSTIC
@@ -77,19 +68,20 @@ class AbotDriverApp extends StatelessWidget {
         // ============================================================
         Provider<AbotMqttService>(
           create: (_) {
-            final mqtt = AbotMqttService();
+            final mqtt = AbotMqttService(
+              authToken: settings.mqttToken,
+              topicBase: settings.mqttTopic,
+            );
 
             unawaited(
-              mqtt.connect().catchError(
-                (Object error, StackTrace stackTrace) {
-                  developer.log(
-                    'Gagal menghubungkan MQTT',
-                    name: 'ABOT MQTT',
-                    error: error,
-                    stackTrace: stackTrace,
-                  );
-                },
-              ),
+              mqtt.connect().catchError((Object error, StackTrace stackTrace) {
+                developer.log(
+                  'Gagal menghubungkan MQTT',
+                  name: 'ABOT MQTT',
+                  error: error,
+                  stackTrace: stackTrace,
+                );
+              }),
             );
 
             return mqtt;
@@ -137,9 +129,7 @@ class AbotDriverApp extends StatelessWidget {
         // ============================================================
         // OSRM ROUTING
         // ============================================================
-        Provider<OsrmService>(
-          create: (_) => OsrmService(),
-        ),
+        Provider<OsrmService>(create: (_) => OsrmService()),
 
         // ============================================================
         // TEXT TO SPEECH
@@ -157,16 +147,14 @@ class AbotDriverApp extends StatelessWidget {
                   enabled: appSettings.ttsEnabled,
                   speakNearNow: appSettings.speakNearNow,
                 );
-              }).catchError(
-                (Object error, StackTrace stackTrace) {
-                  developer.log(
-                    'Gagal menginisialisasi TTS',
-                    name: 'ABOT TTS',
-                    error: error,
-                    stackTrace: stackTrace,
-                  );
-                },
-              ),
+              }).catchError((Object error, StackTrace stackTrace) {
+                developer.log(
+                  'Gagal menginisialisasi TTS',
+                  name: 'ABOT TTS',
+                  error: error,
+                  stackTrace: stackTrace,
+                );
+              }),
             );
 
             return tts;

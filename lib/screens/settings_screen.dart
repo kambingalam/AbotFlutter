@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../services/abot_mqtt_service.dart';
 import '../services/haptic_service.dart';
 import '../services/ota_service.dart';
 import '../services/settings_service.dart';
@@ -21,6 +22,145 @@ class SettingsScreen extends StatelessWidget {
       case AppTheme.system:
         return 'Ikuti sistem';
     }
+  }
+
+  Future<void> _editMqttToken(
+    BuildContext context,
+    SettingsService settings,
+  ) async {
+    final controller = TextEditingController(text: settings.mqttToken);
+    final formKey = GlobalKey<FormState>();
+
+    final value = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Token MQTT'),
+        content: Form(
+          key: formKey,
+          child: TextFormField(
+            controller: controller,
+            autofocus: true,
+            obscureText: true,
+            autocorrect: false,
+            enableSuggestions: false,
+            decoration: const InputDecoration(
+              labelText: 'Token',
+              helperText: 'Minimal 16 karakter, tanpa spasi. Samakan dengan SET auth=...',
+            ),
+            validator: (input) {
+              final token = (input ?? '').trim();
+              if (token.length < 16) return 'Minimal 16 karakter';
+              if (token.length > 200) return 'Maksimal 200 karakter';
+              if (RegExp(r'\s').hasMatch(token)) {
+                return 'Tidak boleh ada spasi';
+              }
+              return null;
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (formKey.currentState?.validate() ?? false) {
+                Navigator.pop(dialogContext, controller.text.trim());
+              }
+            },
+            child: const Text('Simpan'),
+          ),
+        ],
+      ),
+    );
+
+    controller.dispose();
+
+    if (value == null) return;
+
+    final saved = await settings.setMqttToken(value);
+
+    if (!context.mounted) return;
+
+    _showMqttResult(context, saved, 'Token MQTT');
+  }
+
+  Future<void> _editMqttTopic(
+    BuildContext context,
+    SettingsService settings,
+  ) async {
+    final controller = TextEditingController(text: settings.mqttTopic);
+    final formKey = GlobalKey<FormState>();
+
+    final value = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Topik MQTT'),
+        content: Form(
+          key: formKey,
+          child: TextFormField(
+            controller: controller,
+            autofocus: true,
+            autocorrect: false,
+            enableSuggestions: false,
+            decoration: const InputDecoration(
+              labelText: 'Basis topik',
+              helperText: '8-80 karakter: huruf, angka, _ - /',
+            ),
+            validator: (input) {
+              final topic = (input ?? '').trim();
+              if (topic.length < 8 || topic.length > 80) {
+                return 'Harus 8-80 karakter';
+              }
+              if (topic.startsWith('/') || topic.endsWith('/')) {
+                return 'Jangan diawali atau diakhiri /';
+              }
+              if (!RegExp(r'^[A-Za-z0-9_/-]+$').hasMatch(topic)) {
+                return 'Hanya huruf, angka, _ - /';
+              }
+              return null;
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (formKey.currentState?.validate() ?? false) {
+                Navigator.pop(dialogContext, controller.text.trim());
+              }
+            },
+            child: const Text('Simpan'),
+          ),
+        ],
+      ),
+    );
+
+    controller.dispose();
+
+    if (value == null) return;
+
+    final saved = await settings.setMqttTopic(value);
+
+    if (!context.mounted) return;
+
+    _showMqttResult(context, saved, 'Topik MQTT');
+  }
+
+  void _showMqttResult(BuildContext context, bool saved, String label) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          saved
+              ? '$label disimpan. Tutup lalu buka ulang app.'
+              : 'Gagal menyimpan $label.',
+        ),
+      ),
+    );
   }
 
   @override
@@ -150,6 +290,47 @@ class SettingsScreen extends StatelessWidget {
           ),
 
           // ============================================================
+          // KEAMANAN MQTT
+          // ============================================================
+          const _SectionHeader(
+            icon: Icons.lock_rounded,
+            title: 'Keamanan MQTT',
+          ),
+          ListTile(
+            leading: const Icon(Icons.vpn_key_rounded),
+            title: const Text('Token MQTT'),
+            subtitle: Text(
+              settings.hasMqttToken
+                  ? 'Tersimpan (${settings.mqttToken.length} karakter)'
+                  : 'Belum diatur',
+            ),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () async {
+              await HapticService.select();
+              if (!context.mounted) return;
+              await _editMqttToken(context, settings);
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.tag_rounded),
+            title: const Text('Topik MQTT'),
+            subtitle: Text(settings.mqttTopic),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () async {
+              await HapticService.select();
+              if (!context.mounted) return;
+              await _editMqttTopic(context, settings);
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.cloud_rounded),
+            title: const Text('Broker'),
+            subtitle: Text(
+              '${AbotMqttService.host}:${AbotMqttService.port} (TLS)',
+            ),
+          ),
+
+          // ============================================================
           // KONEKSI PERANGKAT (BLE DIAGNOSTIC)
           // ============================================================
           const _SectionHeader(
@@ -170,9 +351,7 @@ class SettingsScreen extends StatelessWidget {
 
               Navigator.push(
                 context,
-                MaterialPageRoute(
-                  builder: (_) => const BleDiagnosticScreen(),
-                ),
+                MaterialPageRoute(builder: (_) => const BleDiagnosticScreen()),
               );
             },
           ),

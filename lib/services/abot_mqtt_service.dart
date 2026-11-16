@@ -10,7 +10,6 @@ import 'package:mqtt_client/mqtt_server_client.dart';
 
 import '../config/app_config.dart';
 
-
 enum AbotMqttState {
   disconnected,
   connecting,
@@ -24,20 +23,26 @@ enum AbotMqttState {
 class AbotMqttService {
   static const String host = 'broker.emqx.io';
 
-  static const int port =
-      AppConfig.mqttUseTls ? AppConfig.mqttTlsPort : 1883;
-
-  static const String commandTopic =
-      'abot/wokwi/477375325542330369/v337/command';
-
-  static const String statusTopic =
-      'abot/wokwi/477375325542330369/v337/status';
-
-  static const String authToken = 'abot-secret-2025';
+  static const int port = AppConfig.mqttUseTls ? AppConfig.mqttTlsPort : 1883;
 
   static const Duration authTimeout = Duration(seconds: 15);
   static const Duration subscribeTimeout = Duration(seconds: 10);
   static const Duration heartbeatTimeout = Duration(seconds: 30);
+
+  AbotMqttService({
+    String authToken = '',
+    String topicBase = AppConfig.defaultMqttTopic,
+  }) : _authToken = authToken.trim(),
+       _topicBase = topicBase.trim().isEmpty
+           ? AppConfig.defaultMqttTopic
+           : topicBase.trim();
+
+  final String _authToken;
+  final String _topicBase;
+
+  String get commandTopic => '$_topicBase/command';
+  String get statusTopic => '$_topicBase/status';
+  bool get hasAuthToken => _authToken.isNotEmpty;
 
   /// Jeda minimum antar percobaan auth otomatis (dipicu heartbeat).
   static const Duration _autoReauthInterval = Duration(seconds: 10);
@@ -48,7 +53,6 @@ class AbotMqttService {
 
   final Queue<Map<String, dynamic>> _outbox = Queue<Map<String, dynamic>>();
 
-
   MqttServerClient? _client;
 
   final StreamController<Map<String, dynamic>> _messages =
@@ -58,7 +62,7 @@ class AbotMqttService {
       StreamController<AbotMqttState>.broadcast();
 
   StreamSubscription<List<MqttReceivedMessage<MqttMessage>>>?
-      _updatesSubscription;
+  _updatesSubscription;
 
   Timer? _authTimer;
   Timer? _heartbeatMonitor;
@@ -179,6 +183,12 @@ class AbotMqttService {
   Future<void> connectAndAuthenticate({
     Duration timeout = const Duration(seconds: 30),
   }) async {
+    if (!hasAuthToken) {
+      throw StateError(
+        'Token MQTT belum diatur. Buka Pengaturan > Keamanan MQTT.',
+      );
+    }
+
     await connect();
 
     if (_disposed) {
@@ -323,8 +333,9 @@ class AbotMqttService {
         _setState(AbotMqttState.disconnected);
       };
 
-    client.connectionMessage =
-        MqttConnectMessage().withClientIdentifier(clientId).startClean();
+    client.connectionMessage = MqttConnectMessage()
+        .withClientIdentifier(clientId)
+        .startClean();
 
     try {
       _log('Connecting to $host:$port', name: 'ABOT MQTT');
@@ -350,9 +361,7 @@ class AbotMqttService {
       // Callback onConnected biasanya sudah memulai subscribe.
       // Fallback hanya jika belum ada yang memulai (state masih "connected",
       // bukan authFailed dsb.), supaya tidak memicu percobaan ganda.
-      if (_state == AbotMqttState.connected &&
-          !_subscribed &&
-          !_subscribing) {
+      if (_state == AbotMqttState.connected && !_subscribed && !_subscribing) {
         unawaited(_subscribeAndAuthenticate(client));
       }
     } catch (error, stackTrace) {
@@ -513,15 +522,18 @@ class AbotMqttService {
     _authenticated = false;
     _lastAuthAttempt = DateTime.now();
 
+    if (!hasAuthToken) {
+      _log('Token MQTT belum diatur, AUTH tidak dikirim', name: 'ABOT MQTT');
+      _setState(AbotMqttState.authFailed);
+      return;
+    }
+
     _setState(AbotMqttState.authenticating);
 
     try {
-      _publishRaw({'t': 'auth', 'token': authToken});
+      _publishRaw({'t': 'auth', 'token': _authToken});
 
-      _log(
-        'AUTH published to $commandTopic',
-        name: 'ABOT MQTT',
-      );
+      _log('AUTH published to $commandTopic', name: 'ABOT MQTT');
     } catch (error) {
       _log('Gagal kirim AUTH: $error', name: 'ABOT MQTT');
 
@@ -534,10 +546,7 @@ class AbotMqttService {
 
     _authTimer = Timer(authTimeout, () {
       if (!_authenticated && !_disposed && identical(_client, client)) {
-        _log(
-          'Timeout menunggu auth_ok dari ESP32',
-          name: 'ABOT MQTT',
-        );
+        _log('Timeout menunggu auth_ok dari ESP32', name: 'ABOT MQTT');
 
         _setState(AbotMqttState.authFailed);
       }
@@ -567,10 +576,7 @@ class AbotMqttService {
         final data = decoded;
         final type = data['t']?.toString();
 
-        _log(
-          'Received on status topic: $payload',
-          name: 'ABOT MQTT',
-        );
+        _log('Received on status topic: $payload', name: 'ABOT MQTT');
 
         switch (type) {
           case 'auth_ok':
@@ -580,10 +586,7 @@ class AbotMqttService {
             _setState(AbotMqttState.ready);
             _startHeartbeatMonitor();
 
-            _log(
-              'ESP32 authenticated successfully',
-              name: 'ABOT MQTT',
-            );
+            _log('ESP32 authenticated successfully', name: 'ABOT MQTT');
             break;
 
           case 'auth_fail':
@@ -716,27 +719,21 @@ class AbotMqttService {
 
     _lastHeartbeat = DateTime.now();
 
-    _heartbeatMonitor = Timer.periodic(
-      const Duration(seconds: 5),
-      (_) {
-        if (_disposed || !_authenticated) return;
+    _heartbeatMonitor = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (_disposed || !_authenticated) return;
 
-        final last = _lastHeartbeat;
-        if (last == null) return;
+      final last = _lastHeartbeat;
+      if (last == null) return;
 
-        if (DateTime.now().difference(last) > heartbeatTimeout) {
-          _log(
-            'Heartbeat timeout: ESP32 offline',
-            name: 'ABOT MQTT',
-          );
+      if (DateTime.now().difference(last) > heartbeatTimeout) {
+        _log('Heartbeat timeout: ESP32 offline', name: 'ABOT MQTT');
 
-          _authenticated = false;
+        _authenticated = false;
 
-          _cancelHeartbeatMonitor();
-          _setState(AbotMqttState.deviceOffline);
-        }
-      },
-    );
+        _cancelHeartbeatMonitor();
+        _setState(AbotMqttState.deviceOffline);
+      }
+    });
   }
 
   // ============================================================
@@ -750,8 +747,7 @@ class AbotMqttService {
       throw StateError('MQTT belum terhubung');
     }
 
-    final builder = MqttClientPayloadBuilder()
-      ..addUTF8String(jsonEncode(data));
+    final builder = MqttClientPayloadBuilder()..addUTF8String(jsonEncode(data));
 
     final payload = builder.payload;
 
@@ -796,8 +792,7 @@ class AbotMqttService {
       return;
     }
 
-    final builder = MqttClientPayloadBuilder()
-      ..addUTF8String(jsonEncode(data));
+    final builder = MqttClientPayloadBuilder()..addUTF8String(jsonEncode(data));
 
     final selectedQos = switch (qos) {
       0 => MqttQos.atMostOnce,
@@ -811,12 +806,7 @@ class AbotMqttService {
       throw StateError('Gagal membuat payload MQTT');
     }
 
-    client.publishMessage(
-      commandTopic,
-      selectedQos,
-      payload,
-      retain: false,
-    );
+    client.publishMessage(commandTopic, selectedQos, payload, retain: false);
 
     // Jangan log token ke console.
     final safe = Map<String, dynamic>.of(data);
@@ -872,7 +862,12 @@ class AbotMqttService {
     return null;
   }
 
-  void _log(String message, {String name = 'ABOT MQTT', Object? error, StackTrace? stackTrace}) {
+  void _log(
+    String message, {
+    String name = 'ABOT MQTT',
+    Object? error,
+    StackTrace? stackTrace,
+  }) {
     if (kReleaseMode) return;
     developer.log(message, name: name, error: error, stackTrace: stackTrace);
   }

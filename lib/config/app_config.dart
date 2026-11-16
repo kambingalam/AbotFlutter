@@ -30,6 +30,9 @@ class AppConfig {
   static const bool mqttUseTls = true;
   static const int mqttTlsPort = 8883;
 
+  // Topik default harus sama dengan firmware. Ganti lewat Pengaturan.
+  static const String defaultMqttTopic = "abot/wokwi/477375325542330369/v337";
+
   // ============================================================
   // DEFAULT LOCATION (Medan)
   // ============================================================
