@@ -33,9 +33,9 @@ class BleDiagnosticScreen extends StatelessWidget {
                 const SizedBox(height: 16),
                 _buildActions(ble),
                 const SizedBox(height: 20),
-                _buildDevices(ble),
-                const SizedBox(height: 20),
                 _buildLogs(ble),
+                const SizedBox(height: 20),
+                _buildDevices(ble),
               ],
             ),
           ),
@@ -167,7 +167,14 @@ class BleDiagnosticScreen extends StatelessWidget {
             ),
           )
         else
-          ...ble.devices.map((result) {
+          ...(ble.devices.toList()
+                ..sort((a, b) {
+                  final an = a.device.platformName.contains('ABOT') ? 0 : 1;
+                  final bn = b.device.platformName.contains('ABOT') ? 0 : 1;
+                  return an != bn ? an - bn : b.rssi.compareTo(a.rssi);
+                }))
+              .take(8)
+              .map((result) {
             final device = result.device;
             final name = device.platformName.isNotEmpty
                 ? device.platformName
