@@ -888,6 +888,11 @@ class AbotMqttService {
       case 'gps':
         return (data['progress'] is num) ||
             (data['lat'] is num && data['lon'] is num);
+      case 'play':
+        return data['url'] is String &&
+            (data['url'] as String).trim().isNotEmpty;
+      case 'music_stop':
+        return true;
       case 'trip_start':
       case 'trip_end':
       case 'reset':

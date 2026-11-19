@@ -5,6 +5,7 @@ import '../services/abot_mqtt_service.dart';
 import '../services/haptic_service.dart';
 import '../services/ota_service.dart';
 import '../services/settings_service.dart';
+import '../services/trip_manager.dart';
 import '../services/tts_service.dart';
 import '../widgets/firmware_ota_card.dart';
 
@@ -163,6 +164,75 @@ class SettingsScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _playFromLink(BuildContext context) async {
+    final trip = context.read<TripManager>();
+    var draft = '';
+
+    final url = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Putar dari link'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TextField(
+              autofocus: true,
+              keyboardType: TextInputType.url,
+              autocorrect: false,
+              enableSuggestions: false,
+              onChanged: (v) => draft = v,
+              decoration: const InputDecoration(
+                labelText: 'URL audio',
+                helperText: 'Link langsung ke file mp3/aac',
+              ),
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              'Device mengunduh audio sendiri lewat WiFi, jadi link harus publik.',
+              style: TextStyle(fontSize: 12),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, draft.trim()),
+            child: const Text('Putar'),
+          ),
+        ],
+      ),
+    );
+
+    if (!context.mounted) return;
+
+    if (url == null || url.isEmpty) return;
+
+    _sendLinkCommand(context, trip, {
+      't': 'play',
+      'url': url,
+    }, 'Perintah putar terkirim');
+  }
+
+  void _sendLinkCommand(
+    BuildContext context,
+    TripManager trip,
+    Map<String, dynamic> payload,
+    String okText,
+  ) {
+    final messenger = ScaffoldMessenger.of(context);
+
+    try {
+      trip.mqtt.publishJson(payload, requireAuthentication: true);
+      messenger.showSnackBar(SnackBar(content: Text(okText)));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('Gagal kirim: $e')));
+    }
   }
 
   @override
@@ -355,6 +425,33 @@ class SettingsScreen extends StatelessWidget {
                 context,
                 MaterialPageRoute(builder: (_) => const BleDiagnosticScreen()),
               );
+            },
+          ),
+
+          // ============================================================
+          // MUSIK DARI LINK
+          // ============================================================
+          const _SectionHeader(icon: Icons.music_note_rounded, title: 'Musik'),
+          ListTile(
+            leading: const Icon(Icons.link_rounded),
+            title: const Text('Putar dari link'),
+            subtitle: const Text('URL langsung ke file audio'),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () async {
+              await HapticService.select();
+              if (!context.mounted) return;
+              await _playFromLink(context);
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.stop_circle_outlined),
+            title: const Text('Hentikan musik'),
+            onTap: () async {
+              await HapticService.select();
+              if (!context.mounted) return;
+              _sendLinkCommand(context, context.read<TripManager>(), {
+                't': 'music_stop',
+              }, 'Perintah stop terkirim');
             },
           ),
 
