@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../services/trip_manager.dart';
 import '../services/update_service.dart';
+import '../theme/app_theme.dart';
 import '../widgets/abot_face.dart';
 import 'home_screen.dart';
 
@@ -21,7 +22,6 @@ class _SplashScreenState extends State<SplashScreen>
     with TickerProviderStateMixin {
   late final AnimationController _entranceController;
   late final AnimationController _routeController;
-  late final AnimationController _pulseController;
 
   late final Animation<double> _logoScale;
   late final Animation<double> _logoFade;
@@ -30,38 +30,24 @@ class _SplashScreenState extends State<SplashScreen>
 
   _GpsState _gpsState = _GpsState.loading;
 
-  static const Color _background = Color(0xFF101A2C);
-  static const Color _surface = Color(0xFF18253A);
-  static const Color _accent = Color(0xFF8DB8FF);
-  static const Color _accentDeep = Color(0xFF416DAA);
-  static const Color _muted = Color(0xFF9AAAC1);
-  static const Color _mutedDim = Color(0xFF63738C);
-  static const Color _success = Color(0xFF7ED6A5);
-  static const Color _error = Color(0xFFE57373);
-
   @override
   void initState() {
     super.initState();
 
     _entranceController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1100),
+      duration: const Duration(milliseconds: 900),
     );
 
     _routeController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 2200),
+      duration: const Duration(milliseconds: 2600),
     )..repeat();
 
-    _pulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1600),
-    )..repeat(reverse: true);
-
-    _logoScale = Tween<double>(begin: 0.78, end: 1.0).animate(
+    _logoScale = Tween<double>(begin: 0.88, end: 1.0).animate(
       CurvedAnimation(
         parent: _entranceController,
-        curve: const Interval(0.0, 0.72, curve: Curves.easeOutBack),
+        curve: const Interval(0.0, 0.7, curve: Curves.easeOutCubic),
       ),
     );
 
@@ -72,14 +58,14 @@ class _SplashScreenState extends State<SplashScreen>
 
     _contentFade = CurvedAnimation(
       parent: _entranceController,
-      curve: const Interval(0.28, 1.0, curve: Curves.easeOut),
+      curve: const Interval(0.3, 1.0, curve: Curves.easeOut),
     );
 
     _contentSlide =
-        Tween<Offset>(begin: const Offset(0, 0.12), end: Offset.zero).animate(
+        Tween<Offset>(begin: const Offset(0, 0.10), end: Offset.zero).animate(
           CurvedAnimation(
             parent: _entranceController,
-            curve: const Interval(0.2, 1.0, curve: Curves.easeOutCubic),
+            curve: const Interval(0.3, 1.0, curve: Curves.easeOutCubic),
           ),
         );
 
@@ -92,9 +78,14 @@ class _SplashScreenState extends State<SplashScreen>
 
     unawaited(_initializeGps(manager));
 
+    // Cek update jalan paralel dan tidak menahan splash lebih dari 2 detik.
+    final updateFuture = UpdateService.check().timeout(
+      const Duration(seconds: 2),
+    );
+
     await _entranceController.forward();
 
-    const minDisplayMs = 2400;
+    const minDisplayMs = 900;
     final elapsed = DateTime.now().difference(startedAt).inMilliseconds;
     final remaining = minDisplayMs - elapsed;
 
@@ -104,9 +95,14 @@ class _SplashScreenState extends State<SplashScreen>
 
     if (!mounted) return;
 
-    // Cek update otomatis (tidak memaksa, hanya tawarkan).
-    final update = await UpdateService.check();
-    if (mounted && update.updateAvailable && update.htmlUrl != null) {
+    UpdateService? update;
+    try {
+      update = await updateFuture;
+    } catch (_) {
+      update = null;
+    }
+
+    if (mounted && update != null && update.updateAvailable && update.htmlUrl != null) {
       await _showUpdateDialog(update);
     }
 
@@ -114,7 +110,7 @@ class _SplashScreenState extends State<SplashScreen>
 
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
-        transitionDuration: const Duration(milliseconds: 600),
+        transitionDuration: const Duration(milliseconds: 400),
         pageBuilder: (_, __, ___) => const HomeScreen(),
         transitionsBuilder: (_, animation, __, child) {
           return FadeTransition(opacity: animation, child: child);
@@ -158,14 +154,10 @@ class _SplashScreenState extends State<SplashScreen>
             child: const Text('Nanti'),
           ),
           TextButton(
-            onPressed: () async {
+            onPressed: () {
               Navigator.of(dialogContext).pop();
-              if (update.htmlUrl != null) {
-                // ignore: avoid_print
-                print('Buka: ${update.htmlUrl}');
-                // Buka browser ke halaman release GitHub.
-                // (paket url_launcher belum ditambahkan — user buka manual via browser)
-              }
+              // Buka browser ke halaman release GitHub.
+              // (paket url_launcher belum ditambahkan — user buka manual via browser)
             },
             child: const Text('Buka GitHub'),
           ),
@@ -178,268 +170,140 @@ class _SplashScreenState extends State<SplashScreen>
   void dispose() {
     _entranceController.dispose();
     _routeController.dispose();
-    _pulseController.dispose();
     super.dispose();
   }
 
   String get _statusText {
     switch (_gpsState) {
       case _GpsState.loading:
-        return 'Abot bangun dulu...';
+        return 'Menyiapkan GPS...';
       case _GpsState.ready:
-        return 'Abot siap, gass!';
+        return 'GPS siap';
       case _GpsState.failed:
-        return 'Abot gak dapat GPS nih';
+        return 'GPS belum aktif';
     }
   }
 
   Color get _statusColor {
     switch (_gpsState) {
       case _GpsState.loading:
-        return _accent.withValues( alpha: 0.45 + _pulseController.value * 0.55);
+        return AppColors.textSecondary;
       case _GpsState.ready:
-        return _success;
+        return AppColors.success;
       case _GpsState.failed:
-        return _error;
+        return AppColors.warning;
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _background,
-      body: Stack(
-        children: [
-          // Background glow kanan atas.
-          Positioned(
-            top: -150,
-            right: -110,
-            child: IgnorePointer(
-              child: Container(
-                width: 310,
-                height: 310,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: RadialGradient(
-                    colors: [
-                      _accent.withValues( alpha: 0.10),
-                      _accent.withValues( alpha: 0.025),
-                      Colors.transparent,
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
+      backgroundColor: AppColors.background,
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 28),
+          child: Column(
+            children: [
+              const Spacer(flex: 3),
 
-          // Background glow kiri bawah.
-          Positioned(
-            bottom: -190,
-            left: -130,
-            child: IgnorePointer(
-              child: Container(
-                width: 360,
-                height: 360,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: RadialGradient(
-                    colors: [
-                      _accentDeep.withValues( alpha: 0.12),
-                      Colors.transparent,
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 24),
-              child: Column(
-                children: [
-                  // Brand label.
-                  FadeTransition(
-                    opacity: _contentFade,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Container(
-                          width: 6,
-                          height: 6,
-                          decoration: const BoxDecoration(
-                            color: _accent,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        const SizedBox(width: 9),
-                        const Text(
-                          'ABOT MOBILITY',
-                          style: TextStyle(
-                            color: _muted,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 3.2,
-                          ),
-                        ),
-                      ],
+              // Logo ABOT dengan mata.
+              FadeTransition(
+                opacity: _logoFade,
+                child: ScaleTransition(
+                  scale: _logoScale,
+                  child: Container(
+                    width: 132,
+                    height: 132,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: AppColors.surface,
+                      border: Border.all(color: AppColors.divider),
+                      boxShadow: AppShadows.card,
                     ),
-                  ),
-
-                  const Spacer(flex: 3),
-
-                  // Logo ABOT dengan mata.
-                  FadeTransition(
-                    opacity: _logoFade,
-                    child: ScaleTransition(
-                      scale: _logoScale,
-                      child: AnimatedBuilder(
-                        animation: _pulseController,
-                        builder: (context, child) {
-                          final pulse = _pulseController.value;
-
-                          return Container(
-                            width: 140,
-                            height: 140,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: _surface,
-                              border: Border.all(
-                                color: _accent.withValues(alpha: 0.12 + pulse * 0.12),
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: _accent.withValues(alpha: 0.035 + pulse * 0.035),
-                                  blurRadius: 30 + pulse * 10,
-                                  spreadRadius: 1,
-                                ),
-                              ],
-                            ),
-                            child: child,
-                          );
-                        },
-                        child: const Center(
-                          child: AbotFace(
-                            size: 84,
-                            color: _accent,
-                            blinkInterval: Duration(seconds: 4),
-                          ),
-                        ),
+                    child: const Center(
+                      child: AbotFace(
+                        size: 76,
+                        color: AppColors.primary,
+                        blinkInterval: Duration.zero,
                       ),
                     ),
                   ),
+                ),
+              ),
 
-                  const SizedBox(height: 35),
+              const SizedBox(height: 28),
 
-                  // Brand name and tagline.
-                  SlideTransition(
-                    position: _contentSlide,
-                    child: FadeTransition(
-                      opacity: _contentFade,
-                      child: Column(
+              // Nama dan status.
+              SlideTransition(
+                position: _contentSlide,
+                child: FadeTransition(
+                  opacity: _contentFade,
+                  child: Column(
+                    children: [
+                      const Text(
+                        'ABOT Driver',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 28,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -0.8,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Text(
-                            'ABOT Driver',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 32,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: -1.1,
-                              height: 1.15,
+                          Container(
+                            width: 7,
+                            height: 7,
+                            decoration: BoxDecoration(
+                              color: _statusColor,
+                              shape: BoxShape.circle,
                             ),
                           ),
-                          const SizedBox(height: 13),
+                          const SizedBox(width: 8),
                           Text(
-                            'Abot siap nemenin perjalananmu.',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: _muted.withValues( alpha: 0.95),
-                              fontSize: 14,
-                              fontWeight: FontWeight.w400,
-                              letterSpacing: 0.3,
+                            _statusText,
+                            style: const TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 13,
                             ),
                           ),
                         ],
                       ),
-                    ),
+                    ],
                   ),
-
-                  const SizedBox(height: 45),
-
-                  // Animated route illustration.
-                  FadeTransition(
-                    opacity: _contentFade,
-                    child: SizedBox(
-                      width: 230,
-                      height: 48,
-                      child: AnimatedBuilder(
-                        animation: _routeController,
-                        builder: (context, child) {
-                          return CustomPaint(
-                            painter: _RoutePainter(
-                              progress: _routeController.value,
-                              accent: _accent,
-                              muted: _muted,
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ),
-
-                  const Spacer(flex: 3),
-
-                  // Loading indicator.
-                  FadeTransition(
-                    opacity: _contentFade,
-                    child: Column(
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            AnimatedBuilder(
-                              animation: _pulseController,
-                              builder: (context, child) {
-                                return Container(
-                                  width: 7,
-                                  height: 7,
-                                  decoration: BoxDecoration(
-                                    color: _statusColor,
-                                    shape: BoxShape.circle,
-                                  ),
-                                );
-                              },
-                            ),
-                            const SizedBox(width: 10),
-                            Text(
-                              _statusText,
-                              style: const TextStyle(
-                                color: _muted,
-                                fontSize: 12,
-                                letterSpacing: 0.25,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 22),
-                        const Text(
-                          'MADE FOR THE JOURNEY',
-                          style: TextStyle(
-                            color: _mutedDim,
-                            fontSize: 9,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 2.1,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+                ),
               ),
-            ),
+
+              const SizedBox(height: 34),
+
+              // Ilustrasi route.
+              FadeTransition(
+                opacity: _contentFade,
+                child: SizedBox(
+                  width: 210,
+                  height: 44,
+                  child: AnimatedBuilder(
+                    animation: _routeController,
+                    builder: (context, child) {
+                      return CustomPaint(
+                        painter: _RoutePainter(
+                          progress: _routeController.value,
+                          accent: AppColors.primary,
+                          muted: AppColors.textSecondary,
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+
+              const Spacer(flex: 4),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -466,17 +330,17 @@ class _RoutePainter extends CustomPainter {
         size.width * 0.22,
         centerY,
         size.width * 0.24,
-        centerY - 20,
+        centerY - 18,
         size.width * 0.43,
-        centerY - 10,
+        centerY - 9,
       )
       ..cubicTo(
         size.width * 0.60,
         centerY,
         size.width * 0.62,
-        centerY + 19,
+        centerY + 17,
         size.width * 0.80,
-        centerY + 8,
+        centerY + 7,
       )
       ..quadraticBezierTo(
         size.width * 0.90,
@@ -486,7 +350,7 @@ class _RoutePainter extends CustomPainter {
       );
 
     final basePaint = Paint()
-      ..color = muted.withValues( alpha: 0.24)
+      ..color = muted.withValues(alpha: 0.28)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.5
       ..strokeCap = StrokeCap.round;
@@ -502,7 +366,7 @@ class _RoutePainter extends CustomPainter {
       final end = start + segmentLength;
 
       final activePaint = Paint()
-        ..color = accent.withValues( alpha: 0.9)
+        ..color = accent.withValues(alpha: 0.9)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2
         ..strokeCap = StrokeCap.round;
@@ -529,7 +393,7 @@ class _RoutePainter extends CustomPainter {
     }
 
     final endpointPaint = Paint()
-      ..color = accent.withValues( alpha: 0.7)
+      ..color = accent.withValues(alpha: 0.7)
       ..style = PaintingStyle.fill;
 
     canvas.drawCircle(Offset(12, centerY), 3, endpointPaint);
