@@ -96,7 +96,7 @@ class FirmwareOtaCard extends StatelessWidget {
       case OtaPhase.connectingWifi:
         return 'ABOT menyambung ke WiFi...';
       case OtaPhase.fetchingManifest:
-        return 'ABOT mengambil info update...';
+        return ota.statusNote ?? 'ABOT mengambil info update...';
       case OtaPhase.downloading:
         return 'Mengunduh firmware: $percent%';
       case OtaPhase.verifying:
@@ -104,7 +104,8 @@ class FirmwareOtaCard extends StatelessWidget {
       case OtaPhase.installing:
         return 'Memasang firmware...';
       case OtaPhase.rebooting:
-        return 'ABOT restart. Mohon tunggu...';
+        return 'ABOT mengunduh dan memasang update, lalu restart. '
+            'Mohon tunggu sekitar 2 menit...';
       case OtaPhase.verifyingVersion:
         return 'Memverifikasi versi baru...';
       case OtaPhase.success:
