@@ -46,8 +46,12 @@ class OtaConfig {
     this.useSimulatedManifest = false,
     this.deviceModel = 'abot-esp32s3',
     this.acceptTimeout = const Duration(seconds: 10),
-    this.stageTimeout = const Duration(seconds: 90),
+    // Dari pesan progres terakhir. Cukup panjang untuk menunggu tombol ACTION
+    // (45 dtk di perangkat) + ABOT memutus MQTT (heartbeat 30 dtk).
+    this.stageTimeout = const Duration(seconds: 150),
     this.rebootTimeout = const Duration(seconds: 120),
+    // Sejak ABOT memutus MQTT untuk mengunduh: unduh + pasang + restart + online.
+    this.installAndRebootTimeout = const Duration(minutes: 4),
     this.versionTimeout = const Duration(seconds: 20),
   });
 
@@ -61,6 +65,7 @@ class OtaConfig {
   final Duration acceptTimeout;
   final Duration stageTimeout;
   final Duration rebootTimeout;
+  final Duration installAndRebootTimeout;
   final Duration versionTimeout;
 }
 
@@ -80,6 +85,16 @@ class OtaService extends ChangeNotifier {
     OtaPhase.installing,
     OtaPhase.rebooting,
     OtaPhase.verifyingVersion,
+  };
+
+  // Fase saat ABOT masih bisa mengirim progres. Kalau koneksi putus di fase ini,
+  // artinya ABOT sengaja memutus MQTT untuk mengunduh firmware (RAM untuk TLS).
+  static const Set<OtaPhase> _midOtaPhases = {
+    OtaPhase.connectingWifi,
+    OtaPhase.fetchingManifest,
+    OtaPhase.downloading,
+    OtaPhase.verifying,
+    OtaPhase.installing,
   };
 
   static const Set<OtaPhase> _cancellablePhases = {
@@ -105,6 +120,9 @@ class OtaService extends ChangeNotifier {
 
   String? _currentVersion;
   String? _targetVersion;
+  String? _startVersion;
+  DateTime? _startedAt;
+  String? _statusNote;
   String? _requestId;
   bool _linkDropped = false;
   bool _simulatedResult = false;
@@ -124,6 +142,9 @@ class OtaService extends ChangeNotifier {
 
   String? get currentVersion => _currentVersion;
   String? get targetVersion => _targetVersion;
+
+  /// Catatan dari ABOT pada pesan progres (mis. "Tekan ACTION di perangkat").
+  String? get statusNote => _statusNote;
   int? get battery => _battery;
 
   bool get isRunning => _runningPhases.contains(_phase);
@@ -249,6 +270,9 @@ class OtaService extends ChangeNotifier {
     _failure = null;
     _progress = 0;
     _targetVersion = manifest.version;
+    _startVersion = _currentVersion;
+    _startedAt = DateTime.now();
+    _statusNote = null;
     _requestId = _newId();
     _linkDropped = false;
     _simulatedResult = false;
@@ -302,6 +326,7 @@ class OtaService extends ChangeNotifier {
     _cancelTimer();
     _failure = null;
     _manifest = null;
+    _statusNote = null;
     _progress = 0;
     _simulatedResult = false;
     _setPhase(OtaPhase.idle);
@@ -381,6 +406,9 @@ class OtaService extends ChangeNotifier {
       OtaStage.install => OtaPhase.installing,
       _ => OtaPhase.downloading,
     };
+
+    final note = m['message']?.toString();
+    _statusNote = (note != null && note.isNotEmpty) ? note : null;
 
     _progress = percent / 100;
     _setPhase(next);
@@ -468,29 +496,85 @@ class OtaService extends ChangeNotifier {
       changed = true;
     }
 
-    if (ver != null &&
-        ver.isNotEmpty &&
-        (_phase == OtaPhase.rebooting ||
-            _phase == OtaPhase.verifyingVersion)) {
-      _evaluateVersion(ver);
-      return;
+    if (ver != null && ver.isNotEmpty) {
+      if (_phase == OtaPhase.rebooting ||
+          _phase == OtaPhase.verifyingVersion) {
+        _evaluateVersion(ver);
+        return;
+      }
+
+      // ABOT memutus MQTT saat mengunduh, jadi ota_done tidak pernah sampai.
+      // Kalau ABOT melapor versi target (juga setelah timeout), update berhasil.
+      if (_versionReachedTarget(ver)) {
+        _succeed();
+        return;
+      }
     }
 
     if (changed) _notify();
   }
 
   void _onReadyChanged(bool ready) {
-    if (_phase != OtaPhase.rebooting) return;
-
     if (!ready) {
-      _linkDropped = true;
-    } else if (_linkDropped) {
+      if (_midOtaPhases.contains(_phase)) {
+        // ABOT memutus MQTT untuk mengunduh. Tidak akan ada progres sampai
+        // ABOT restart dan online lagi, jadi tunggu dengan batas waktu panjang.
+        _linkDropped = true;
+        _statusNote = null;
+        _setPhase(OtaPhase.rebooting);
+        _arm(config.installAndRebootTimeout, () {
+          _fail(
+            OtaErrorCode.appTimeout,
+            'ABOT tidak kembali online setelah update',
+          );
+        });
+      } else if (_phase == OtaPhase.rebooting) {
+        _linkDropped = true;
+      }
+      return;
+    }
+
+    if (_phase == OtaPhase.rebooting && _linkDropped) {
       _setPhase(OtaPhase.verifyingVersion);
 
       _arm(config.versionTimeout, () {
-        _fail(OtaErrorCode.appTimeout, 'versi baru belum bisa diverifikasi');
+        final stillOld = _startVersion != null &&
+            _currentVersion != null &&
+            _sameVersion(_currentVersion!, _startVersion!);
+
+        if (stillOld) {
+          _fail(
+            OtaErrorCode.bootFailed,
+            'ABOT masih di versi ${_currentVersion ?? '?'}, target ${_targetVersion ?? '?'}',
+          );
+        } else {
+          _fail(OtaErrorCode.appTimeout, 'versi baru belum bisa diverifikasi');
+        }
       });
     }
+  }
+
+  /// true kalau [ver] adalah versi target dan update ini memang masih relevan
+  /// (sedang berjalan, atau baru saja gagal karena timeout/koneksi).
+  bool _versionReachedTarget(String ver) {
+    final target = _targetVersion;
+    if (target == null || !_sameVersion(ver, target)) return false;
+
+    final start = _startVersion;
+    if (start != null && _sameVersion(ver, start)) return false;
+
+    if (isRunning) return true;
+
+    if (_phase == OtaPhase.failed) {
+      final code = _failure?.code;
+      final startedAt = _startedAt;
+      final recent = startedAt != null &&
+          DateTime.now().difference(startedAt) < const Duration(minutes: 15);
+      return recent &&
+          (code == OtaErrorCode.appTimeout || code == OtaErrorCode.linkLost);
+    }
+
+    return false;
   }
 
   void _evaluateVersion(String reported) {
@@ -501,6 +585,11 @@ class OtaService extends ChangeNotifier {
       _succeed();
       return;
     }
+
+    // Versi lama bisa datang dari pesan lama (retained). Tunggu sampai
+    // batas waktu verifikasi sebelum menyatakan gagal.
+    final start = _startVersion;
+    if (start != null && _sameVersion(reported, start)) return;
 
     if (_phase == OtaPhase.verifyingVersion) {
       _fail(
@@ -576,6 +665,7 @@ class OtaService extends ChangeNotifier {
     _cancelTimer();
     _progress = 1;
     _failure = null;
+    _statusNote = null;
 
     final target = _targetVersion;
     if (target != null) _currentVersion = target;
@@ -585,6 +675,7 @@ class OtaService extends ChangeNotifier {
 
   void _fail(OtaErrorCode code, [String? detail]) {
     _cancelTimer();
+    _statusNote = null;
     _failure = OtaFailure(code, detail);
 
     developer.log(
